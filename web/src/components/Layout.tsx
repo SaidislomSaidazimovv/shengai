@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/store/userStore";
 import type { Lang } from "@/lib/api";
+import { UserMenu } from "@/components/UserMenu";
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", end: true },
@@ -85,6 +86,10 @@ export function Layout() {
               </Link>
             </Button>
 
+            <div className="hidden md:block">
+              <UserMenu />
+            </div>
+
             <button
               onClick={() => setOpen((o) => !o)}
               className="rounded-md p-2 text-muted-foreground hover:bg-secondary md:hidden"
@@ -136,6 +141,9 @@ export function Layout() {
                   Try Free
                 </Link>
               </Button>
+              <div className="mt-2">
+                <UserMenu compact />
+              </div>
             </div>
           </div>
         )}

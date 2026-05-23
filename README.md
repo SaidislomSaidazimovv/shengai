@@ -47,8 +47,13 @@ A **web-based** (no install), **fully responsive** pronunciation trainer that co
 
 **Backend** (`api/`) — Vercel Python Serverless
 - Python 3.11
-- NumPy + SciPy (DTW for pitch comparison)
+- NumPy (DTW for pitch comparison)
 - google-generativeai (Gemini 2.0 Flash)
+
+**Auth + Sync** (optional)
+- Firebase Auth (Google sign-in)
+- Firestore (cross-device attempt history)
+- Falls back to localStorage when Firebase env vars are absent
 
 **Deploy:** Vercel (frontend + serverless API in one repo)
 
@@ -101,14 +106,40 @@ uvicorn index:app --reload --port 8000
 # → http://localhost:8000
 ```
 
-### 4. Deploy to Vercel
+### 4. (Optional) Firebase setup for sign-in + sync
+
+Without Firebase the app works fully — progress lives in `localStorage`. To
+enable Google sign-in and cross-device sync:
+
+1. Create a project at [Firebase Console](https://console.firebase.google.com).
+2. **Build → Authentication → Sign-in method** → enable **Google**.
+3. **Build → Firestore Database** → create database (production mode).
+4. Copy security rules from `firestore.rules` into the **Rules** tab and publish.
+5. **Project Settings → Your apps → Web app** → copy the config keys into
+   `web/.env`:
+
+   ```
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=<project-id>.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=<project-id>
+   VITE_FIREBASE_APP_ID=...
+   ```
+
+6. Add your production domain (e.g. `<your-app>.vercel.app`) to
+   **Authentication → Settings → Authorized domains**.
+
+### 5. Deploy to Vercel
 
 ```bash
 npm i -g vercel
 vercel
 ```
 
-Add `GEMINI_API_KEY` in the Vercel dashboard → Settings → Environment Variables.
+Add the following in the Vercel dashboard → Settings → Environment Variables:
+- `GEMINI_API_KEY` (Production, Preview, Development)
+- `GEMINI_MODEL=gemini-2.0-flash`
+- `ALLOWED_ORIGINS=https://<your-app>.vercel.app,http://localhost:5173`
+- All `VITE_FIREBASE_*` vars (if using Firebase)
 
 ---
 
@@ -123,8 +154,9 @@ Per Hackathon rules (§10 Responsible AI, §6 disclosure):
 | **Web Audio API** | Browser native | `web/src/lib/audio.ts` — microphone capture | Standard browser audio recording |
 | **DTW (Dynamic Time Warping)** | Custom NumPy implementation | `api/score.py` — compares user pitch curve to reference | Scoring tone accuracy |
 | **shadcn/ui** | Open-source React components (MIT) | `web/src/components/ui/` | UI primitives |
-| **Pinyin reference data** | Public pinyin syllable table (CC-BY) | `web/src/lib/pinyinData.ts` | 21 initials × 38 finals chart |
-| **Native audio samples** | Generated via free TTS (Edge-TTS) for demo, or recorded by team | `web/public/audio/` | Reference pronunciation |
+| **Firebase Auth + Firestore** | Google BaaS | `web/src/lib/firebase.ts` | Optional Google sign-in + cross-device attempt sync |
+| **Pinyin reference data** | Public pinyin syllable table | `web/src/lib/data.ts` | 21 initials × 38 finals chart |
+| **Native audio samples** | Browser `SpeechSynthesis` API for demo | n/a | Reference pronunciation playback |
 
 **No private data, no user data sent to third parties beyond Gemini for the explanation text. No medical / grading / child-safety claims.**
 

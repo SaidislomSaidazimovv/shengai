@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Landing } from "@/pages/Landing";
@@ -7,8 +8,17 @@ import { PinyinChartPage } from "@/pages/PinyinChartPage";
 import { Dashboard } from "@/pages/Dashboard";
 import { Lesson } from "@/pages/Lesson";
 import { NotFound } from "@/pages/NotFound";
+import { useAuth } from "@/hooks/useAuth";
+import { attachRemoteSync } from "@/store/userStore";
 
 export default function App() {
+  const { user, enabled } = useAuth();
+
+  useEffect(() => {
+    if (!enabled) return;
+    void attachRemoteSync(user?.uid ?? null);
+  }, [user, enabled]);
+
   return (
     <Routes>
       <Route element={<Layout />}>

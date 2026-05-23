@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Firestore security rules for ShengAI.
+//
+// Model:
+//   /users/{uid}                    — profile metadata (optional)
+//   /users/{uid}/attempts/{id}      — pronunciation attempts
+//
+// A user may read and write only their own subtree. Nothing is public.
+// Schema is validated on writes to keep junk out of the collection.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isValidAttempt() {
+      return request.resource.data.keys().hasAll([
+        'id', 'ts', 'pinyin',
+        'intendedTone', 'detectedTone',
+        'toneScore', 'initialScore', 'finalScore', 'overall'
+      ])
+      && request.resource.data.intendedTone is int
+      && request.resource.data.detectedTone is int
+      && request.resource.data.toneScore is number
+      && request.resource.data.initialScore is number
+      && request.resource.data.finalScore is number
+      && request.resource.data.overall is number
+      && request.resource.data.pinyin is string
+      && request.resource.data.pinyin.size() <= 32;
+    }
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /attempts/{attemptId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidAttempt();
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    // Deny everything else.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
