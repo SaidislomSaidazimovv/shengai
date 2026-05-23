@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/ovozData";
+import { getDemoSentence } from "@/lib/demoData";
 
 /**
  * Clinical loading state — the calm before the diagnosis card slams in.

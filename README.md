@@ -1,11 +1,11 @@
-# OVOZ
+# SHENG 声
 
 > **Hear yourself speak perfect Mandarin — diagnosed by your L1.**
 > Built for the Build with AI EdTech Hackathon 2026 · General Education track · New Uzbekistan University.
 
 A 10-second loop: **SPEAK → DIAGNOSE → GOLDEN VOICE → MIRROR.** You read a Mandarin sentence, an L1-aware phoneme card slams in, your own cloned voice plays the corrected version, then a webcam mirror closes the lip gap.
 
-OVOZ ("voice" in Uzbek) is built from Tashkent, for the 200M Russian and Turkic speakers no mainstream pronunciation app bothers with.
+SHENG (声 — "voice/sound" in Mandarin) is built from Tashkent, for the 200M Russian and Turkic speakers no mainstream pronunciation app bothers with.
 
 ---
 
@@ -47,7 +47,7 @@ The handover proposed `mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme` via Hu
 We replaced HF with the **browser-native Web Speech API**:
 - Returns Mandarin hanzi for what the user actually said (no token, no cold-start, sub-second).
 - We diff the transcript against the expected sentence character-by-character.
-- The first mismatching character maps to its signature phoneme (per `charPhonemeIdx` in `ovozData.ts`), and that phoneme is highlighted in the analysis grid and stored on the session as the trigger.
+- The first mismatching character maps to its signature phoneme (per `charPhonemeIdx` in `demoData.ts`), and that phoneme is highlighted in the analysis grid and stored on the session as the trigger.
 - The L1 card we slam in is still the scripted one keyed on (L1, sentence). That's the cheat — but the signal that fires it is genuine.
 
 ### What's "honest" about the result
@@ -91,7 +91,7 @@ The reference capture is a separate sub-flow in the app (Step 0). The clone is c
 ```bash
 git clone https://github.com/SaidislomSaidazimovv/sheganai.git
 cd sheganai
-git checkout ovoz   # the OVOZ branch — main is the legacy ShengAI codebase
+git checkout ovoz   # active branch — `main` keeps the legacy single-purpose ShengAI codebase
 
 cd web && npm install
 ```
@@ -105,7 +105,7 @@ Copy `.env.example` to `api/.env` and `web/.env`, then fill in:
 ELEVENLABS_API_KEY=...
 ELEVENLABS_MODEL=eleven_flash_v2_5
 HF_TOKEN=...
-HF_MDD_ENDPOINT=https://api-inference.huggingface.co/models/mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme
+HF_ASR_ENDPOINT=https://api-inference.huggingface.co/models/openai/whisper-large-v3
 
 # web/.env
 VITE_API_BASE_URL=
@@ -116,7 +116,7 @@ VITE_API_BASE_URL=
 ```bash
 # Recommended: vercel dev — serves frontend + serverless on one port
 npm i -g vercel
-vercel link              # link to the OVOZ project once
+vercel link              # link to the Vercel project once
 vercel dev               # http://localhost:3000
 
 # Or, frontend only (uses fallbacks for HF + ElevenLabs)
@@ -135,9 +135,7 @@ In the Vercel dashboard → Settings → Environment Variables, add the same key
 
 ## What we built vs the legacy ShengAI branch
 
-The repo started as **ShengAI** — a 6-page Mandarin pronunciation trainer with pitch curves, Firebase auth, and an adaptive drill engine. After advisor review we pivoted to OVOZ: single-screen clinical demo, voice cloning, lip mirror.
-
-The ShengAI implementation lives on the `main` branch as a fallback. OVOZ lives here on `ovoz`.
+The repo started as a 6-page Mandarin pronunciation trainer with pitch curves, Firebase auth, and an adaptive drill engine on the `main` branch. After advisor review we pivoted to **SHENG**: a single-screen clinical demo, voice cloning, lip mirror. The original implementation stays on `main` as a fallback; the active build lives on the `ovoz` branch (kept as the branch name for deploy continuity).
 
 ---
 
@@ -148,7 +146,7 @@ The ShengAI implementation lives on the `main` branch as a fallback. OVOZ lives 
 | **ElevenLabs Flash v2.5 + Instant Voice Cloning** | `api/clone.py`, `api/synth.py` — produces the "golden voice" | Sub-75ms TTS in user's own timbre |
 | **Web Speech API (browser)** | `web/src/lib/speechRecognition.ts` — primary ASR path on Chrome/Edge/Safari | Free, no token, no cold-start, supports `zh-CN` |
 | **HuggingFace Whisper Large V3** | `api/asr.py` — server-side ASR fallback when the browser engine is unavailable (Firefox) or errors out | Strong Mandarin accuracy, free Inference API tier, uses `HF_TOKEN` |
-| **Hardcoded L1 diagnosis JSON** | `web/src/lib/ovozData.ts` | Demo cheat per dev handover §5 — see "The L1 Cheat" above |
+| **Hardcoded L1 diagnosis JSON** | `web/src/lib/demoData.ts` | Demo cheat per dev handover §5 — see "The L1 Cheat" above |
 | **MediaPipe Face Mesh** (planned wiring) | `web/src/components/stages/MirrorStage.tsx` | Lip articulation tracking |
 | **MediaRecorder API + AnalyserNode** | `web/src/lib/audio.ts` | Browser-native microphone capture + waveform analysis |
 | **shadcn/ui primitives** | `web/src/components/ui/` | MIT-licensed React components |
@@ -193,7 +191,7 @@ sheganai/
 │   │   ├── App.tsx              # Single-page state machine
 │   │   ├── components/
 │   │   │   ├── DiagnosisCard.tsx   # The unforgettable hero card
-│   │   │   ├── Header.tsx          # OVOZ wordmark + stage pill
+│   │   │   ├── Header.tsx          # SHENG wordmark + stage pill
 │   │   │   ├── LanguageToggle.tsx  # RU / UZ — the L1 cheat input
 │   │   │   ├── SentencePrompt.tsx  # Hanzi + pinyin centerpiece
 │   │   │   ├── Waveform.tsx        # Canvas bar waveform
@@ -204,14 +202,11 @@ sheganai/
 │   │   ├── lib/
 │   │   │   ├── audio.ts            # WAV encoder + Recorder
 │   │   │   ├── api.ts              # Typed serverless client
-│   │   │   ├── ovozData.ts         # Demo sentences + L1 JSON
+│   │   │   ├── demoData.ts         # Demo sentences + L1 JSON
 │   │   │   └── utils.ts
 │   │   └── store/
 │   │       └── session.ts          # Zustand state machine
 │   └── package.json
-├── docs/
-│   ├── DEV_HANDOVER.md            # Locked engineering plan (the source of truth)
-│   └── DECK_SCRIPT.md             # 10-slide pitch script + demo choreography
 ├── vercel.json
 ├── .env.example
 ├── LICENSE                        # MIT

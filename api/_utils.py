@@ -1,5 +1,5 @@
 """
-Shared helpers for the OVOZ Vercel serverless endpoints.
+Shared helpers for the SHENG Vercel serverless endpoints.
 
 We keep the surface tiny on purpose: each endpoint is a single Python
 file with a `handler` class, and shared bits live here. Heavy lifting

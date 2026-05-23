@@ -22,10 +22,10 @@ EL_BASE = os.environ.get("ELEVENLABS_BASE", "https://api.elevenlabs.io")
 
 def post(fields: dict[str, Any]) -> dict[str, Any]:
     audio = fields.get("audio")
-    label_raw = fields.get("label", "ovoz-reference")
+    label_raw = fields.get("label", "sheng-reference")
     if not isinstance(audio, dict):
         raise ValueError("audio file is required")
-    label = label_raw if isinstance(label_raw, str) and label_raw else "ovoz-reference"
+    label = label_raw if isinstance(label_raw, str) and label_raw else "sheng-reference"
 
     if not EL_KEY:
         return {"voiceId": "demo-fallback", "source": "fallback", "reason": "no_elevenlabs_key"}
@@ -34,7 +34,7 @@ def post(fields: dict[str, Any]) -> dict[str, Any]:
         files = {"files": (audio.get("filename", "reference.wav"), audio["data"], audio.get("content_type", "audio/wav"))}
         data = {
             "name": label,
-            "description": "OVOZ instant clone (L1 reference)",
+            "description": "SHENG instant clone (L1 reference)",
             "remove_background_noise": "true",
         }
         res = requests.post(

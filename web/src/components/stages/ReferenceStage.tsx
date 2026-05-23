@@ -2,7 +2,7 @@ import { Mic, ArrowLeft, ArrowRight, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Waveform } from "@/components/Waveform";
-import { REFERENCE_SCRIPTS } from "@/lib/ovozData";
+import { REFERENCE_SCRIPTS } from "@/lib/demoData";
 import { useSession } from "@/store/session";
 import { formatSeconds } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ interface Props {
 }
 
 /**
- * Reference capture screen. Per OVOZ_DevHandover §3 the user reads a short
+ * Reference capture screen. Per the dev handover §3 the user reads a short
  * paragraph *in their L1* so we clone their timbre without Mandarin
  * contamination. This is a separate sub-state from the main loop.
  */

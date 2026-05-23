@@ -1,5 +1,5 @@
 /**
- * The "Unforgettable Moment" per OVOZ_DeckScript.
+ * The "Unforgettable Moment" per the deck script.
  *
  * This card slams in at second 10 of the demo. It is the single screenshot
  * judges will share. Design notes from the brief, treated as constraints:
@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { cn, timestamp } from "@/lib/utils";
-import type { Diagnosis } from "@/lib/ovozData";
+import type { Diagnosis } from "@/lib/demoData";
 
 interface Props {
   diagnosis: Diagnosis;
@@ -36,7 +36,7 @@ export function DiagnosisCard({ diagnosis, hero = true }: Props) {
       <div className="flex items-center justify-between border-b border-line/60 pb-3 mb-8 font-data text-[10px] tracking-[0.2em] uppercase text-fg/40">
         <div className="flex items-center gap-4">
           <CornerMark />
-          <span>Phonetic Analysis · OVOZ/v01</span>
+          <span>Phonetic Analysis · SHENG/v01</span>
         </div>
         <div className="flex items-center gap-4">
           <span>READING #{stampedAt.replace(/:/g, "")}</span>

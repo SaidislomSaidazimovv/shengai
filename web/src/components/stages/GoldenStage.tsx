@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Waveform } from "@/components/Waveform";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/ovozData";
+import { getDemoSentence } from "@/lib/demoData";
 
 interface Props {
   onContinue: () => void;

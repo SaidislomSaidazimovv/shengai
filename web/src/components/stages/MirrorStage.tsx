@@ -3,7 +3,7 @@ import { Camera, CheckCircle2, ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/ovozData";
+import { getDemoSentence } from "@/lib/demoData";
 import { useLipTracker } from "@/hooks/useLipTracker";
 import { cn } from "@/lib/utils";
 

@@ -1,7 +1,7 @@
 /**
- * The OVOZ demo session state machine.
+ * The SHENG demo session state machine.
  *
- * Per OVOZ_DevHandover §4, every recording loop walks through:
+ * Per the dev handover §4, every recording loop walks through:
  *   IDLE → RECORDING → ANALYZING → DIAGNOSIS → GOLDEN_VOICE → MIRROR → RESOLVED
  *
  * State is intentionally global and singleton — there is one demo running
@@ -11,7 +11,7 @@
  */
 
 import { create } from "zustand";
-import type { L1 } from "@/lib/ovozData";
+import type { L1 } from "@/lib/demoData";
 
 export type Stage =
   | "idle"

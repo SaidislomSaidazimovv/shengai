@@ -1,4 +1,4 @@
-import { L1_LABELS } from "@/lib/ovozData";
+import { L1_LABELS } from "@/lib/demoData";
 import { useSession } from "@/store/session";
 import { cn } from "@/lib/utils";
 

@@ -12,7 +12,7 @@ export default {
     },
     extend: {
       colors: {
-        // Clinical palette per OVOZ_DevHandover §10 + DeckScript design direction.
+        // Clinical palette per the dev handover §10 + deck script design direction.
         bg: "#0a0a0a",
         fg: "#ffffff",
         signal: {

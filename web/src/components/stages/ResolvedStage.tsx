@@ -2,7 +2,7 @@ import { CheckCircle2, RotateCcw, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/store/session";
-import { DEMO_SENTENCES, getDemoSentence } from "@/lib/ovozData";
+import { DEMO_SENTENCES, getDemoSentence } from "@/lib/demoData";
 
 interface Props {
   onAgain: () => void;

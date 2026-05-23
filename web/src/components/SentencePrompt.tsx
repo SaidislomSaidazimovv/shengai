@@ -1,12 +1,12 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DEMO_SENTENCES } from "@/lib/ovozData";
+import { DEMO_SENTENCES } from "@/lib/demoData";
 import { useSession } from "@/store/session";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 /**
  * Sentence the user is about to read. Three demo sentences are hardcoded
- * per OVOZ_DevHandover §6 — caller picks which by ID. The picker doubles
+ * per the dev handover §6 — caller picks which by ID. The picker doubles
  * as the visual centerpiece of the IDLE state.
  */
 export function SentencePrompt({ allowSwitch = true }: { allowSwitch?: boolean }) {

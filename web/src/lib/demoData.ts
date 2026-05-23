@@ -1,7 +1,7 @@
 /**
  * Demo sentences + hardcoded L1 -> diagnosis mapping.
  *
- * Per OVOZ_DevHandover §5 ("The L1 Detection Cheat"): the phoneme MDD
+ * Per the dev handover §5 ("The L1 Detection Cheat"): the phoneme MDD
  * genuinely runs, but the L1 label and the diagnosis copy are picked from
  * this table based on (a) the language the user manually picked and
  * (b) which demo sentence they read.

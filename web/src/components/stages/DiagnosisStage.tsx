@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { DiagnosisCard } from "@/components/DiagnosisCard";
 import { ArrowRight } from "lucide-react";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/ovozData";
+import { getDemoSentence } from "@/lib/demoData";
 
 interface Props {
   /** Auto-advance after the card has been on screen long enough. */
