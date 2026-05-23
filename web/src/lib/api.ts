@@ -12,16 +12,11 @@
 
 const BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-export interface MddResponse {
-  /** Phonemes the model heard. */
-  detected: string[];
-  /** Phonemes we expected. */
-  expected: string[];
-  /** Per-phoneme error score (0..1). */
-  hits: { phoneme: string; errorScore: number }[];
-  /** First phoneme above an error threshold — drives our diagnosis trigger. */
-  worst: string | null;
+export interface AsrResponse {
+  /** Mandarin transcript Whisper produced. Empty when nothing usable. */
+  transcript: string;
   source: "huggingface" | "fallback";
+  reason?: string | null;
 }
 
 export interface CloneResponse {
@@ -64,11 +59,17 @@ async function postWithTimeout<T>(path: string, body: FormData | object, timeout
 }
 
 export const api = {
-  async mdd(audio: Blob, expectedPhonemes: string[]): Promise<MddResponse> {
+  /**
+   * Server-side ASR via HuggingFace Whisper Large V3.
+   * Used as a fallback when the browser's Web Speech API is unavailable
+   * (Firefox) or returns an error. Generous timeout — Whisper may take
+   * a few seconds on warm requests and significantly longer on a cold
+   * start; callers can race this against a cheaper signal.
+   */
+  async asr(audio: Blob): Promise<AsrResponse> {
     const fd = new FormData();
-    fd.append("audio", audio, "target.wav");
-    fd.append("expected", expectedPhonemes.join(" "));
-    return postWithTimeout<MddResponse>("/api/mdd", fd, 5000);
+    fd.append("audio", audio, "target.webm");
+    return postWithTimeout<AsrResponse>("/api/asr", fd, 30000);
   },
 
   async cloneVoice(reference: Blob, label: string): Promise<CloneResponse> {

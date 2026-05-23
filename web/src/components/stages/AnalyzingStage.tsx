@@ -23,7 +23,17 @@ export function AnalyzingStage() {
   const sentenceId = useSession((s) => s.sentenceId);
   const triggeredPhoneme = useSession((s) => s.triggeredPhoneme);
   const triggeredPhonemeIdx = useSession((s) => s.triggeredPhonemeIdx);
+  const asrProvider = useSession((s) => s.asrProvider);
   const l1 = useSession((s) => s.l1);
+
+  // Provider label shown in the top-right while analyzing — clarifies
+  // which engine produced the transcript driving the trigger phoneme.
+  const providerLabel =
+    asrProvider === "huggingface"
+      ? "Whisper Large V3 · HuggingFace"
+      : asrProvider === "browser"
+      ? "Web Speech API · Browser"
+      : "wav2vec2-xlsr · L2-arctic";
 
   const sentence = getDemoSentence(sentenceId);
   const phonemes = sentence?.expectedPhonemes ?? [];
@@ -66,7 +76,7 @@ export function AnalyzingStage() {
             PHONEME DETECTION
           </Badge>
           <span className="font-data text-[10px] uppercase tracking-[0.22em] text-fg/40">
-            wav2vec2-xlsr · L2-arctic
+            {providerLabel}
           </span>
         </div>
 

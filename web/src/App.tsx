@@ -88,24 +88,52 @@ export default function App() {
         return;
       }
 
-      // Await the ASR result (started in parallel by onStartRecording).
+      // ----------- C.3 dual-provider ASR -----------
+      // 1. Browser Web Speech API is primary (sub-second, started in
+      //    parallel by onStartRecording).
+      // 2. HuggingFace Whisper Large V3 is the fallback when the
+      //    browser engine is unavailable or returns nothing useful.
+      // We never lie when both produce empty: route to NO SPEECH.
       const recognition = recognitionRef.current;
-      const asr = recognition
+      const browserAsr = recognition
         ? await recognition.result
-        : { transcript: "", confidence: 0, supported: false };
+        : { transcript: "", confidence: 0, supported: false as const };
       recognitionRef.current = null;
-      session.setLastTranscript(asr.transcript);
 
-      const mismatchCharIdx = findFirstMismatch(sentence.hanzi, asr.transcript);
-      const noSpeech = asr.transcript.length === 0;
+      let transcript = browserAsr.transcript;
+      let provider: "browser" | "huggingface" | "none" = "none";
+
+      const browserUsable = browserAsr.supported && transcript.length > 0;
+      const browserGaveUpEarly =
+        !browserAsr.supported ||
+        (browserAsr.error && browserAsr.error !== "no-speech");
+
+      if (browserUsable) {
+        provider = "browser";
+      } else if (browserGaveUpEarly) {
+        // Web Speech couldn't help — try Whisper.
+        try {
+          const hf = await api.asr(target.blob);
+          if (hf.transcript) {
+            transcript = hf.transcript;
+            provider = "huggingface";
+          }
+        } catch {
+          // Network/timeout — leave transcript empty, route to no-speech.
+        }
+      }
+
+      session.setLastTranscript(transcript);
+      session.setAsrProvider(provider);
+
+      const mismatchCharIdx = findFirstMismatch(sentence.hanzi, transcript);
+      const noSpeech = transcript.length === 0;
       const perfect = !noSpeech && mismatchCharIdx === -1;
 
-      // Pick the real trigger phoneme:
-      //   - If the user actually said something wrong, point to that
-      //     character's signature phoneme.
-      //   - If they said it perfectly or said nothing, fall back to the
-      //     scripted trigger so the demo continues for judging — but
-      //     branch the UX (NO SPEECH state) so we don't lie when silent.
+      // Pick the real trigger phoneme: if the user actually said
+      // something wrong, point to that character's signature phoneme;
+      // otherwise fall back to the scripted trigger so the demo card
+      // still has a phoneme to highlight.
       let triggerPhoneme: string;
       let triggerIdx: number;
       if (mismatchCharIdx >= 0 && mismatchCharIdx < sentence.charPhonemeIdx.length) {
@@ -115,11 +143,6 @@ export default function App() {
         triggerPhoneme = sentence.diagnoses[session.l1].triggerPhoneme;
         triggerIdx = sentence.expectedPhonemes.indexOf(triggerPhoneme);
       }
-
-      // We also ping /api/mdd for production parity — it currently
-      // returns the fallback shape, but the wiring is in place if we
-      // swap in a working phoneme endpoint later.
-      void api.mdd(target.blob, sentence.expectedPhonemes).catch(() => undefined);
 
       const hits = sentence.expectedPhonemes.map((p, i) => ({
         phoneme: p,

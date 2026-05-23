@@ -27,7 +27,7 @@ The demo screen has at most: mic button, language toggle, sentence prompt, state
 | Frontend | Vite + React 19 + TypeScript + Tailwind |
 | State | Zustand (one global session machine) |
 | Audio capture | MediaRecorder API + AnalyserNode (browser-native, single stream) |
-| **Speech recognition** | Browser Web Speech API (`SpeechRecognition`, `lang="zh-CN"`) — drives the *real* phoneme trigger by comparing what the user said to the expected hanzi |
+| **Speech recognition** | Browser Web Speech API (`SpeechRecognition`, `lang="zh-CN"`) is primary (sub-second on Chrome/Edge/Safari). HuggingFace **Whisper Large V3** is the fallback for Firefox or when the browser engine errors out (`/api/asr`). Either way we compare the produced transcript to the expected hanzi to drive the *real* trigger. |
 | **L1 detection** | Hardcoded JSON keyed on user-picked language + demo sentence (see "The L1 Cheat" below) |
 | **Voice cloning** | ElevenLabs Flash v2.5 + Instant Voice Cloning |
 | **Lip tracking** | Webcam + target overlay (MediaPipe Face Mesh integration ready, falls back to static target) |
@@ -59,7 +59,9 @@ We replaced HF with the **browser-native Web Speech API**:
 
 ### Browser support note
 
-Web Speech API works in Chrome, Edge, and Safari. Firefox does not implement it. The app degrades to the scripted trigger on unsupported browsers — that's the only path where the trigger is purely scripted, and we annotate it as such in the limitations section.
+Web Speech API works in Chrome, Edge, and Safari. Firefox does not implement it — in that case the app transparently falls back to **HuggingFace Whisper Large V3** via `/api/asr`. The trigger phoneme is still derived from a real transcript, just produced server-side.
+
+Provider selection is honest: the `AnalyzingStage` shows which engine (`Web Speech API · Browser` or `Whisper Large V3 · HuggingFace`) actually produced the transcript driving the diagnosis.
 
 ---
 
@@ -144,12 +146,12 @@ The ShengAI implementation lives on the `main` branch as a fallback. OVOZ lives 
 | Component | Where used | Why |
 |---|---|---|
 | **ElevenLabs Flash v2.5 + Instant Voice Cloning** | `api/clone.py`, `api/synth.py` — produces the "golden voice" | Sub-75ms TTS in user's own timbre |
-| **Web Speech API (browser)** | `web/src/lib/speechRecognition.ts` — drives the real phoneme trigger | Free, no token, no cold-start, supports `zh-CN` |
+| **Web Speech API (browser)** | `web/src/lib/speechRecognition.ts` — primary ASR path on Chrome/Edge/Safari | Free, no token, no cold-start, supports `zh-CN` |
+| **HuggingFace Whisper Large V3** | `api/asr.py` — server-side ASR fallback when the browser engine is unavailable (Firefox) or errors out | Strong Mandarin accuracy, free Inference API tier, uses `HF_TOKEN` |
 | **Hardcoded L1 diagnosis JSON** | `web/src/lib/ovozData.ts` | Demo cheat per dev handover §5 — see "The L1 Cheat" above |
 | **MediaPipe Face Mesh** (planned wiring) | `web/src/components/stages/MirrorStage.tsx` | Lip articulation tracking |
 | **MediaRecorder API + AnalyserNode** | `web/src/lib/audio.ts` | Browser-native microphone capture + waveform analysis |
 | **shadcn/ui primitives** | `web/src/components/ui/` | MIT-licensed React components |
-| **HuggingFace Inference (deferred)** | `api/mdd.py` proxy retained for future model wiring | Reserved — current build doesn't depend on it |
 
 **No private data sent to third parties.** Audio leaves the device for two reasons only: (a) the reference clone goes to ElevenLabs once, and (b) the target attempt goes to HuggingFace for MDD. We never persist either server-side.
 

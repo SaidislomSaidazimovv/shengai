@@ -79,9 +79,13 @@ interface SessionState {
   triggeredPhonemeIdx: number | null;
   setMddResult: (hits: PhonemeHit[], trigger: string | null, idx: number | null) => void;
 
-  /** What the browser ASR actually heard. Empty if no-speech. */
+  /** What the ASR (browser OR Whisper) actually heard. Empty if no-speech. */
   lastTranscript: string;
   setLastTranscript: (t: string) => void;
+
+  /** Which engine produced the transcript — surfaced in the UI for honesty. */
+  asrProvider: "browser" | "huggingface" | "none";
+  setAsrProvider: (p: "browser" | "huggingface" | "none") => void;
 
   golden: GoldenClip | null;
   setGolden: (g: GoldenClip | null) => void;
@@ -110,6 +114,7 @@ export const useSession = create<SessionState>((set) => ({
       triggeredPhoneme: null,
       triggeredPhonemeIdx: null,
       lastTranscript: "",
+      asrProvider: "none",
       golden: null,
     }),
 
@@ -130,6 +135,9 @@ export const useSession = create<SessionState>((set) => ({
 
   lastTranscript: "",
   setLastTranscript: (lastTranscript) => set({ lastTranscript }),
+
+  asrProvider: "none",
+  setAsrProvider: (asrProvider) => set({ asrProvider }),
 
   golden: null,
   setGolden: (golden) => set({ golden }),
