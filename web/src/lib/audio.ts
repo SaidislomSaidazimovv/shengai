@@ -1,151 +1,171 @@
 /**
- * Microphone recording utilities backed by the Web Audio API + MediaRecorder.
+ * Microphone recording — single-stream design.
  *
- * - Requests mic permission lazily (only when the user clicks "Record").
- * - Captures raw PCM samples for client-side pitch analysis (Pitchy).
- * - Encodes a WAV blob the user can play back and the backend can score.
+ * Why this exists:
+ *   - We need a recorded blob to ship to HuggingFace (MDD) and to play back.
+ *   - We also need a live AnalyserNode for the waveform.
+ *   - Both must run off the SAME MediaStream — two `getUserMedia` calls
+ *     conflict in some browsers and produce empty captures.
  *
- * NOTE: We deliberately avoid 3rd-party audio encoders to keep bundle size
- * small and dependencies minimal — a 200-line WAV writer is plenty.
+ * Approach: open the stream once, attach an AnalyserNode for live RMS,
+ * and pipe the same stream into a MediaRecorder for the captured blob.
+ * The MediaRecorder produces WebM/Opus (Chrome/Firefox) or MP4/AAC
+ * (Safari) — both are acceptable inputs for HuggingFace's audio
+ * pipelines (ffmpeg decodes them server-side).
+ *
+ * Why MediaRecorder over ScriptProcessorNode:
+ *   - ScriptProcessorNode is deprecated and has a known cleanup race
+ *     that caused our previous auto-stop bug.
+ *   - MediaRecorder has a single, well-defined `stop` event and handles
+ *     teardown internally.
  */
 
 export interface Recording {
-  /** Mono float32 PCM samples, range [-1, 1]. */
-  samples: Float32Array;
-  /** Sample rate of the recording in Hz. */
-  sampleRate: number;
-  /** Playable blob (audio/wav). */
   blob: Blob;
-  /** Object URL for the blob — caller is responsible for revoking. */
   url: string;
-  /** Duration in seconds. */
   duration: number;
+  mimeType: string;
 }
 
-export class Recorder {
-  private stream: MediaStream | null = null;
-  private context: AudioContext | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
-  private processor: ScriptProcessorNode | null = null;
-  private chunks: Float32Array[] = [];
-  private startedAt = 0;
+export interface AudioPipeline {
+  stream: MediaStream;
+  context: AudioContext;
+  analyser: AnalyserNode;
+  recorder: MediaRecorder;
+}
 
-  async start(): Promise<void> {
-    if (this.stream) throw new Error("Recorder already running");
-
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: false,
-      },
-    });
-
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.context = new AudioCtx({ sampleRate: 44100 });
-
-    this.source = this.context.createMediaStreamSource(this.stream);
-    this.processor = this.context.createScriptProcessor(4096, 1, 1);
-
-    this.chunks = [];
-    this.processor.onaudioprocess = (event) => {
-      const channel = event.inputBuffer.getChannelData(0);
-      this.chunks.push(new Float32Array(channel));
-    };
-
-    this.source.connect(this.processor);
-    this.processor.connect(this.context.destination);
-    this.startedAt = performance.now();
-  }
-
-  async stop(): Promise<Recording> {
-    if (!this.stream || !this.context || !this.processor || !this.source) {
-      throw new Error("Recorder is not running");
+/** Pick a MediaRecorder mime type the current browser can produce. */
+function pickMimeType(): string {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+    "audio/mpeg",
+  ];
+  for (const m of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) {
+      return m;
     }
-
-    this.processor.disconnect();
-    this.source.disconnect();
-    this.stream.getTracks().forEach((t) => t.stop());
-
-    const sampleRate = this.context.sampleRate;
-    const samples = concat(this.chunks);
-    const blob = encodeWav(samples, sampleRate);
-    const url = URL.createObjectURL(blob);
-    const duration = samples.length / sampleRate;
-
-    await this.context.close();
-    this.context = null;
-    this.processor = null;
-    this.source = null;
-    this.stream = null;
-    this.chunks = [];
-
-    return { samples, sampleRate, blob, url, duration };
   }
-
-  isRecording(): boolean {
-    return this.stream !== null;
-  }
-
-  elapsedMs(): number {
-    return this.startedAt ? performance.now() - this.startedAt : 0;
-  }
-}
-
-function concat(chunks: Float32Array[]): Float32Array {
-  const total = chunks.reduce((sum, c) => sum + c.length, 0);
-  const out = new Float32Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
-  }
-  return out;
+  return "";
 }
 
 /**
- * Minimal 16-bit PCM WAV encoder. Produces a blob playable in <audio>
- * and accepted by virtually every server-side audio library.
+ * Open the mic, wire up the analyser + recorder, and start capturing.
+ * Returns the pipeline so callers can drive it (read analyser, stop
+ * recorder). The returned recorder is already in "recording" state.
  */
-function encodeWav(samples: Float32Array, sampleRate: number): Blob {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
+export async function startPipeline(): Promise<AudioPipeline> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
 
-  writeString(view, 0, "RIFF");
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeString(view, 8, "WAVE");
-  writeString(view, 12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(view, 36, "data");
-  view.setUint32(40, samples.length * 2, true);
+  const AudioCtx =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const context = new AudioCtx();
+  const source = context.createMediaStreamSource(stream);
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 1024;
+  source.connect(analyser);
 
-  let offset = 44;
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    offset += 2;
+  const mimeType = pickMimeType();
+  const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  recorder.start();
+
+  return { stream, context, analyser, recorder };
+}
+
+/**
+ * Stop the pipeline and finalize the recorded blob.
+ *
+ * Idempotent: calling stopPipeline twice is safe — the second call is
+ * a no-op (state is already "inactive" / streams already stopped).
+ *
+ * Resolves with a Recording. If the recorder produced no data, the
+ * Recording's blob is empty and `duration` is 0; callers can detect
+ * this and treat it as a silence/failure.
+ */
+export async function stopPipeline(pipeline: AudioPipeline): Promise<Recording> {
+  const { stream, context, recorder } = pipeline;
+
+  // 1. Gather chunks from the recorder, then resolve once it has stopped.
+  const chunks: Blob[] = [];
+  const dataPromise = new Promise<void>((resolve) => {
+    if (recorder.state === "inactive") {
+      resolve();
+      return;
+    }
+    const onData = (e: BlobEvent) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+    const onStop = () => {
+      recorder.removeEventListener("dataavailable", onData);
+      recorder.removeEventListener("stop", onStop);
+      resolve();
+    };
+    recorder.addEventListener("dataavailable", onData);
+    recorder.addEventListener("stop", onStop);
+    try {
+      recorder.requestData(); // flush partial buffer
+    } catch {
+      // Some browsers don't support requestData; safe to skip.
+    }
+    try {
+      recorder.stop();
+    } catch {
+      // Already stopped; resolve via onStop or fallback timer.
+      setTimeout(resolve, 50);
+    }
+  });
+
+  await dataPromise;
+
+  // 2. Stop the mic tracks.
+  stream.getTracks().forEach((t) => {
+    try {
+      t.stop();
+    } catch {
+      // ignore
+    }
+  });
+
+  // 3. Tear the audio graph down.
+  try {
+    if (context.state !== "closed") await context.close();
+  } catch {
+    // ignore
   }
 
-  return new Blob([buffer], { type: "audio/wav" });
+  const mimeType = recorder.mimeType || "audio/webm";
+  const blob = new Blob(chunks, { type: mimeType });
+  const url = blob.size > 0 ? URL.createObjectURL(blob) : "";
+  // We don't get exact duration from MediaRecorder; callers compute
+  // duration from elapsed time on the UI side.
+  return { blob, url, duration: 0, mimeType };
 }
 
-function writeString(view: DataView, offset: number, str: string): void {
-  for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-}
-
-export async function ensureMicPermission(): Promise<boolean> {
+/** Best-effort cleanup if the pipeline must be abandoned without finalizing. */
+export function abortPipeline(pipeline: AudioPipeline): void {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => t.stop());
-    return true;
+    if (pipeline.recorder.state !== "inactive") pipeline.recorder.stop();
   } catch {
-    return false;
+    // ignore
+  }
+  pipeline.stream.getTracks().forEach((t) => {
+    try {
+      t.stop();
+    } catch {
+      // ignore
+    }
+  });
+  if (pipeline.context.state !== "closed") {
+    void pipeline.context.close().catch(() => undefined);
   }
 }

@@ -1,21 +1,29 @@
 /**
- * Live microphone recording hook.
+ * Live microphone recording hook — rewritten on top of MediaRecorder.
  *
- * Returns:
- *   - state: idle / recording / processing
- *   - liveSamples: short RMS history for the waveform component
- *   - start() / stop() — async; start resolves with true on success;
- *                       stop resolves with a Recording or null.
- *
- * Auto-stop: when elapsed reaches maxSeconds the hook calls the caller's
- * onFinish callback with the recording. Without that, the auto-stopped
- * recording would be discarded and the UI would silently stall.
+ * Design notes after the previous iteration's auto-stop bug:
+ *   - Pipeline state lives in refs, not in useCallback closures, so RAF
+ *     re-renders can't strand the loop.
+ *   - There is exactly ONE active pipeline at a time. start() refuses
+ *     to spin up a second one until the first is finalized.
+ *   - finalize() is guarded against re-entry — once it starts, a second
+ *     call resolves with the same promise.
+ *   - Auto-stop and manual stop go through the same `stop()` codepath,
+ *     so there's a single place where the recorder ends.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Recorder, type Recording } from "@/lib/audio";
+import {
+  abortPipeline,
+  startPipeline,
+  stopPipeline,
+  type AudioPipeline,
+  type Recording,
+} from "@/lib/audio";
 
 const HISTORY = 96;
+const RMS_INTERVAL_MS = 60;
+const ELAPSED_INTERVAL_MS = 100;
 
 export type RecorderState = "idle" | "recording" | "processing" | "error";
 
@@ -32,14 +40,11 @@ export function useRecorder(
   maxSeconds = 8,
   onFinish?: (recording: Recording) => void
 ): UseRecorderResult {
-  const recorderRef = useRef<Recorder | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const pipelineRef = useRef<AudioPipeline | null>(null);
   const startedAtRef = useRef<number>(0);
-  // Latest callback reference — avoid stale closures when the parent
-  // re-renders with a new onFinish.
+  const finalizePromiseRef = useRef<Promise<Recording | null> | null>(null);
+  const rmsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onFinishRef = useRef(onFinish);
   useEffect(() => {
     onFinishRef.current = onFinish;
@@ -50,101 +55,120 @@ export function useRecorder(
   const [liveSamples, setLiveSamples] = useState<number[]>([]);
   const [elapsed, setElapsed] = useState(0);
 
-  const teardown = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    analyserRef.current?.disconnect();
-    analyserRef.current = null;
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      void audioCtxRef.current.close();
+  /** Stop both timers without touching the pipeline. */
+  const clearTimers = useCallback(() => {
+    if (rmsTimerRef.current) {
+      clearInterval(rmsTimerRef.current);
+      rmsTimerRef.current = null;
     }
-    audioCtxRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+    if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
+    }
   }, []);
 
-  useEffect(() => () => teardown(), [teardown]);
-
+  /** Finalize the active pipeline. Idempotent: parallel calls share one promise. */
   const finalize = useCallback(async (): Promise<Recording | null> => {
-    const rec = recorderRef.current;
-    if (!rec) return null;
+    if (finalizePromiseRef.current) return finalizePromiseRef.current;
+    const pipeline = pipelineRef.current;
+    if (!pipeline) return null;
+    pipelineRef.current = null;
     setState("processing");
-    try {
-      const result = await rec.stop();
-      recorderRef.current = null;
-      teardown();
-      setState("idle");
-      return result;
-    } catch (e) {
-      console.error(e);
-      setError("Could not finalize the recording.");
-      setState("error");
-      teardown();
-      return null;
-    }
-  }, [teardown]);
+    clearTimers();
 
-  const tick = useCallback(() => {
-    const analyser = analyserRef.current;
-    if (!analyser) return;
-    const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);
-    let sum = 0;
-    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-    const rms = Math.sqrt(sum / buf.length);
-    setLiveSamples((prev) => {
-      const next = [...prev, rms];
-      return next.length > HISTORY ? next.slice(-HISTORY) : next;
-    });
+    const startedAt = startedAtRef.current;
+    const promise = (async (): Promise<Recording | null> => {
+      try {
+        const result = await stopPipeline(pipeline);
+        const duration = startedAt ? (performance.now() - startedAt) / 1000 : 0;
+        setState("idle");
+        return { ...result, duration };
+      } catch (err) {
+        console.error("finalize failed", err);
+        setError("Could not finalize the recording.");
+        setState("error");
+        return null;
+      } finally {
+        finalizePromiseRef.current = null;
+      }
+    })();
 
-    const e = (performance.now() - startedAtRef.current) / 1000;
-    setElapsed(e);
+    finalizePromiseRef.current = promise;
+    return promise;
+  }, [clearTimers]);
 
-    if (e >= maxSeconds) {
-      // Auto-stop: deliver the recording to the caller so the UI advances.
-      void finalize().then((result) => {
-        if (result && onFinishRef.current) onFinishRef.current(result);
-      });
-      return;
-    }
-    rafRef.current = requestAnimationFrame(tick);
-  }, [maxSeconds, finalize]);
-
+  /** Start recording. Resolves true on success, false if mic denied. */
   const start = useCallback(async (): Promise<boolean> => {
+    if (pipelineRef.current) {
+      // Already running — refuse rather than overlap streams.
+      return state === "recording";
+    }
     setError(null);
     setLiveSamples([]);
     setElapsed(0);
+    setState("processing");
+
+    let pipeline: AudioPipeline;
     try {
-      const rec = new Recorder();
-      await rec.start();
-      recorderRef.current = rec;
-
-      // Parallel analyser — sniffs the mic stream for live RMS.
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      audioCtxRef.current = ctx;
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      startedAtRef.current = performance.now();
-      setState("recording");
-      rafRef.current = requestAnimationFrame(tick);
-      return true;
-    } catch (e) {
-      console.error(e);
+      pipeline = await startPipeline();
+    } catch (err) {
+      console.error("startPipeline failed", err);
       setError("Microphone access was denied or no device is available.");
       setState("error");
-      teardown();
       return false;
     }
-  }, [tick, teardown]);
 
+    pipelineRef.current = pipeline;
+    startedAtRef.current = performance.now();
+    setState("recording");
+
+    // Sample RMS off the analyser node at a steady interval. Interval is
+    // a kinder fit than RAF here: we don't need 60fps and we avoid the
+    // closure-rebinding traps the old RAF loop had.
+    rmsTimerRef.current = setInterval(() => {
+      const live = pipelineRef.current;
+      if (!live) return;
+      const buf = new Float32Array(live.analyser.fftSize);
+      live.analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / buf.length);
+      setLiveSamples((prev) => {
+        const next = prev.length >= HISTORY ? prev.slice(-(HISTORY - 1)) : prev.slice();
+        next.push(rms);
+        return next;
+      });
+    }, RMS_INTERVAL_MS);
+
+    // Independent elapsed-time tick handles the auto-stop.
+    elapsedTimerRef.current = setInterval(() => {
+      const e = (performance.now() - startedAtRef.current) / 1000;
+      setElapsed(e);
+      if (e >= maxSeconds) {
+        clearTimers();
+        void finalize().then((result) => {
+          if (result && onFinishRef.current) onFinishRef.current(result);
+        });
+      }
+    }, ELAPSED_INTERVAL_MS);
+
+    return true;
+  }, [state, maxSeconds, finalize, clearTimers]);
+
+  /** Manual stop. Returns the recording (or null on failure). */
   const stop = useCallback(() => finalize(), [finalize]);
+
+  /** On unmount, dispose any live pipeline. */
+  useEffect(() => {
+    return () => {
+      clearTimers();
+      const live = pipelineRef.current;
+      if (live) {
+        pipelineRef.current = null;
+        abortPipeline(live);
+      }
+    };
+  }, [clearTimers]);
 
   return { state, error, liveSamples, elapsed, start, stop };
 }

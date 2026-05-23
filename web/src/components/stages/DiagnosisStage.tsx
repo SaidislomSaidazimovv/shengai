@@ -16,7 +16,7 @@ interface Props {
  * until the user clicks continue. The 3-second hold is the most powerful
  * sound in the room — see the DeckScript speaker notes.
  */
-export function DiagnosisStage({ autoAdvance = false, onContinue }: Props) {
+export function DiagnosisStage({ autoAdvance = true, onContinue }: Props) {
   const l1 = useSession((s) => s.l1);
   const sentenceId = useSession((s) => s.sentenceId);
   const sentence = getDemoSentence(sentenceId);
