@@ -1,14 +1,10 @@
 """
-Shared helpers for the Vercel serverless endpoints.
+Shared helpers for the OVOZ Vercel serverless endpoints.
 
-Kept dependency-light on purpose:
-  - We need to fit inside Vercel's 50 MB Python bundle limit.
-  - Heavy ML (e.g. wav2vec2) is intentionally not on this hot path; the
-    frontend does the audio capture and pitch extraction, and we receive a
-    pre-computed contour as JSON.
-
-The shape of each request/response matches the TypeScript types in
-`web/src/lib/api.ts` so the boundary stays honest.
+We keep the surface tiny on purpose: each endpoint is a single Python
+file with a `handler` class, and shared bits live here. Heavy lifting
+(MDD, voice cloning, TTS) runs on external APIs (HuggingFace,
+ElevenLabs) so this layer stays inside Vercel's 50 MB function budget.
 """
 from __future__ import annotations
 
@@ -17,30 +13,31 @@ import os
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Callable
 
-import numpy as np
-
 
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
+        "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000",
     ).split(",")
     if o.strip()
 ]
 
 
 def _origin_allowed(origin: str | None) -> str:
-    """Return the value to put in `Access-Control-Allow-Origin`."""
     if not origin:
         return "*"
     if "*" in ALLOWED_ORIGINS:
         return "*"
-    return origin if origin in ALLOWED_ORIGINS else ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+    if origin in ALLOWED_ORIGINS:
+        return origin
+    return ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
 
 
-def make_handler(post_fn: Callable[[dict[str, Any]], dict[str, Any]]) -> type[BaseHTTPRequestHandler]:
-    """Wrap a JSON-in / JSON-out function into a Vercel-style handler."""
+def make_json_handler(
+    post_fn: Callable[[dict[str, Any]], dict[str, Any]],
+) -> type[BaseHTTPRequestHandler]:
+    """Wrap a JSON-in / JSON-out function as a Vercel-style handler."""
 
     class Handler(BaseHTTPRequestHandler):
         def _cors(self) -> None:
@@ -50,7 +47,7 @@ def make_handler(post_fn: Callable[[dict[str, Any]], dict[str, Any]]) -> type[Ba
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.send_header("Access-Control-Max-Age", "600")
 
-        def do_OPTIONS(self) -> None:  # noqa: N802 (BaseHTTPRequestHandler casing)
+        def do_OPTIONS(self) -> None:  # noqa: N802
             self.send_response(204)
             self._cors()
             self.end_headers()
@@ -66,7 +63,7 @@ def make_handler(post_fn: Callable[[dict[str, Any]], dict[str, Any]]) -> type[Ba
                 self._respond(200, payload)
             except ValueError as exc:
                 self._respond(400, {"error": str(exc)})
-            except Exception as exc:  # pragma: no cover — defensive
+            except Exception as exc:  # noqa: BLE001
                 self._respond(500, {"error": "internal_error", "detail": str(exc)})
 
         def do_GET(self) -> None:  # noqa: N802
@@ -82,93 +79,114 @@ def make_handler(post_fn: Callable[[dict[str, Any]], dict[str, Any]]) -> type[Ba
             self.wfile.write(payload)
 
         def log_message(self, *_args: Any) -> None:  # pragma: no cover
-            return  # silence default request logger; Vercel captures stdout
+            return
 
     return Handler
 
 
-# ----- Pitch / tone helpers ----------------------------------------------------
+def parse_multipart(body: bytes, content_type: str) -> dict[str, Any]:
+    """Minimal multipart parser — enough for our (file, fields...) requests.
 
-
-def normalize_voiced(values: list[float | None]) -> np.ndarray:
-    """Drop unvoiced frames and return a 1-D float array."""
-    arr = np.array([v for v in values if v is not None], dtype=np.float64)
-    return arr
-
-
-def dtw_distance(a: np.ndarray, b: np.ndarray) -> float:
-    """Standard DTW with absolute-difference local cost.
-
-    Returns the per-step average cost so the metric is invariant to length.
+    Returns a dict where file parts are dicts {"filename": str, "data": bytes,
+    "content_type": str} and text fields are plain strings.
     """
-    if a.size == 0 or b.size == 0:
-        return float("inf")
-    n, m = a.size, b.size
-    cost = np.full((n + 1, m + 1), np.inf, dtype=np.float64)
-    cost[0, 0] = 0.0
-    for i in range(1, n + 1):
-        for j in range(1, m + 1):
-            d = abs(a[i - 1] - b[j - 1])
-            cost[i, j] = d + min(cost[i - 1, j], cost[i, j - 1], cost[i - 1, j - 1])
-    return float(cost[n, m] / max(n, m))
+    if not content_type.startswith("multipart/form-data"):
+        return {}
+    boundary_marker = "boundary="
+    idx = content_type.find(boundary_marker)
+    if idx < 0:
+        return {}
+    boundary = content_type[idx + len(boundary_marker):].strip().strip('"')
+    delimiter = b"--" + boundary.encode()
+    parts = body.split(delimiter)
+    result: dict[str, Any] = {}
+    for part in parts:
+        if not part or part.strip() in (b"", b"--", b"--\r\n"):
+            continue
+        if part.startswith(b"\r\n"):
+            part = part[2:]
+        if part.endswith(b"\r\n"):
+            part = part[:-2]
+        try:
+            header_end = part.index(b"\r\n\r\n")
+        except ValueError:
+            continue
+        raw_headers = part[:header_end].decode("utf-8", errors="ignore")
+        data = part[header_end + 4:]
+        headers: dict[str, str] = {}
+        for line in raw_headers.split("\r\n"):
+            if ":" in line:
+                k, v = line.split(":", 1)
+                headers[k.strip().lower()] = v.strip()
+        disposition = headers.get("content-disposition", "")
+        name = _extract(disposition, "name=")
+        filename = _extract(disposition, "filename=")
+        if not name:
+            continue
+        if filename:
+            result[name] = {
+                "filename": filename,
+                "data": data,
+                "content_type": headers.get("content-type", "application/octet-stream"),
+            }
+        else:
+            result[name] = data.decode("utf-8", errors="replace")
+    return result
 
 
-# Canonical reference contours, normalized [0, 1], length 20.
-# Mirrors web/src/lib/pitch.ts so client and server produce comparable scores.
-def _linspace(a: float, b: float, n: int) -> list[float]:
-    if n <= 1:
-        return [a]
-    step = (b - a) / (n - 1)
-    return [a + step * i for i in range(n)]
+def _extract(disposition: str, key: str) -> str | None:
+    idx = disposition.find(key)
+    if idx < 0:
+        return None
+    rest = disposition[idx + len(key):]
+    if rest.startswith('"'):
+        end = rest.find('"', 1)
+        return rest[1:end] if end > 0 else None
+    end = rest.find(";")
+    return rest[:end] if end > 0 else rest
 
 
-def _dipping(n: int = 20) -> list[float]:
-    import math
+def make_multipart_handler(
+    post_fn: Callable[[dict[str, Any]], dict[str, Any]],
+) -> type[BaseHTTPRequestHandler]:
+    """Variant of make_json_handler for multipart/form-data POSTs."""
 
-    out: list[float] = []
-    for i in range(n):
-        t = i / max(n - 1, 1)
-        v = 0.55 - 0.5 * math.sin(math.pi * t) + 0.4 * t * t
-        out.append(max(0.0, min(1.0, v)))
-    return out
+    class Handler(BaseHTTPRequestHandler):
+        def _cors(self) -> None:
+            origin = self.headers.get("Origin")
+            self.send_header("Access-Control-Allow-Origin", _origin_allowed(origin))
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "600")
 
+        def do_OPTIONS(self) -> None:  # noqa: N802
+            self.send_response(204)
+            self._cors()
+            self.end_headers()
 
-TONE_REFERENCES: dict[int, list[float]] = {
-    1: _linspace(0.85, 0.85, 20),
-    2: _linspace(0.35, 0.90, 20),
-    3: _dipping(),
-    4: _linspace(0.95, 0.15, 20),
-    5: _linspace(0.55, 0.45, 20),
-}
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            raw = self.rfile.read(length) if length > 0 else b""
+            ctype = self.headers.get("Content-Type", "")
+            try:
+                fields = parse_multipart(raw, ctype)
+                payload = post_fn(fields)
+                self._respond(200, payload)
+            except ValueError as exc:
+                self._respond(400, {"error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                self._respond(500, {"error": "internal_error", "detail": str(exc)})
 
+        def _respond(self, status: int, body: dict[str, Any]) -> None:
+            self.send_response(status)
+            self._cors()
+            self.send_header("Content-Type", "application/json")
+            payload = json.dumps(body).encode("utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
 
-def score_tone(contour_hz: list[float | None], intended_tone: int) -> tuple[float, int, list[float]]:
-    """Return (score 0–100, detected tone, reference contour used)."""
-    reference = TONE_REFERENCES.get(int(intended_tone), TONE_REFERENCES[1])
-    voiced = normalize_voiced(contour_hz)
-    if voiced.size < 4:
-        return 0.0, 5, reference
+        def log_message(self, *_args: Any) -> None:  # pragma: no cover
+            return
 
-    ref_arr = np.array(reference, dtype=np.float64)
-    dist = dtw_distance(voiced, ref_arr)
-    score = max(0.0, min(100.0, 100.0 - dist * 110.0))
-
-    # Detect tone from shape — simple slope/range heuristic, mirrors frontend.
-    start = float(voiced[: max(2, voiced.size // 6)].mean())
-    end = float(voiced[-max(2, voiced.size // 6) :].mean())
-    rng = float(voiced.max() - voiced.min())
-    slope = end - start
-    min_idx = int(np.argmin(voiced))
-
-    if rng < 0.15:
-        detected = 1 if start > 0.55 else 5
-    elif slope > 0.2:
-        detected = 2
-    elif slope < -0.2:
-        detected = 4
-    elif voiced.size * 0.2 < min_idx < voiced.size * 0.85 and voiced[min_idx] < start - 0.1 and voiced[min_idx] < end - 0.1:
-        detected = 3
-    else:
-        detected = 2 if slope >= 0 else 4
-
-    return float(score), int(detected), reference
+    return Handler

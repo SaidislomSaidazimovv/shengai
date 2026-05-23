@@ -50,3 +50,6 @@ coverage/
 *.local
 audio_cache/
 tmp/
+
+.vercel
+.env*.local

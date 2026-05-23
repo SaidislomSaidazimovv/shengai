@@ -1,18 +1,19 @@
-"""GET /api/health — simple liveness probe used by the frontend status dot."""
+"""GET /api/health — liveness + capability probe used by the UI."""
 from __future__ import annotations
 
 import os
 from typing import Any
 
-from _utils import make_handler
+from _utils import make_json_handler
 
 
-def post(body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
+def post(_body: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": True,
-        "geminiConfigured": bool(os.environ.get("GEMINI_API_KEY")),
-        "model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+        "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY")),
+        "hf": bool(os.environ.get("HF_TOKEN")),
+        "model": os.environ.get("ELEVENLABS_MODEL", "eleven_flash_v2_5"),
     }
 
 
-handler = make_handler(post)
+handler = make_json_handler(post)

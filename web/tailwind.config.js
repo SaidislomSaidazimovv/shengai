@@ -5,82 +5,75 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "1rem",
+      padding: "1.5rem",
       screens: {
-        "2xl": "1280px",
+        "2xl": "1440px",
       },
     },
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+        // Clinical palette per OVOZ_DevHandover §10 + DeckScript design direction.
+        bg: "#0a0a0a",
+        fg: "#ffffff",
+        signal: {
+          DEFAULT: "#FF3838",
+          50: "#FFE5E5",
+          100: "#FFCCCC",
+          500: "#FF3838",
+          600: "#E61E1E",
         },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+        gold: {
+          DEFAULT: "#D4A437",
+          50: "#FBF1D7",
+          100: "#F6E3AE",
+          500: "#D4A437",
+          600: "#B0871D",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "#1a1a1a",
+          fg: "#6b6b6b",
         },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-        brand: {
-          50: "#fff5ed",
-          100: "#ffe8d4",
-          200: "#ffcca8",
-          300: "#ffa770",
-          400: "#ff7937",
-          500: "#ff5410",
-          600: "#f03c06",
-          700: "#c72c07",
-          800: "#9d240e",
-          900: "#7e210f",
-        },
-      },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        line: "#2a2a2a",
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui"],
-        chinese: ["Noto Sans SC", "PingFang SC", "ui-sans-serif"],
+        display: ["'Archivo Narrow'", "'Archivo'", "ui-sans-serif"],
+        mono: ["'JetBrains Mono'", "'Söhne Mono'", "ui-monospace", "monospace"],
+        cjk: ["'Noto Sans SC'", "'PingFang SC'", "ui-sans-serif"],
+        sans: ["'Inter'", "ui-sans-serif", "system-ui"],
+      },
+      letterSpacing: {
+        tightest: "-0.04em",
+        tighter: "-0.025em",
       },
       keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
+        "slam-in": {
+          "0%": { transform: "scale(1.06)", opacity: "0" },
+          "60%": { transform: "scale(0.985)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
         },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
+        "scan-line": {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100%)" },
         },
-        "pulse-ring": {
-          "0%": { transform: "scale(0.8)", opacity: "0.7" },
-          "100%": { transform: "scale(2.4)", opacity: "0" },
+        "phoneme-tick": {
+          "0%, 100%": { opacity: "0.2", transform: "scaleY(0.4)" },
+          "50%": { opacity: "1", transform: "scaleY(1)" },
+        },
+        "wave-pulse": {
+          "0%, 100%": { transform: "scaleY(1)" },
+          "50%": { transform: "scaleY(1.6)" },
+        },
+        "hairline": {
+          "0%": { width: "0%" },
+          "100%": { width: "100%" },
         },
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        "pulse-ring": "pulse-ring 1.4s cubic-bezier(0.215, 0.61, 0.355, 1) infinite",
+        "slam-in": "slam-in 280ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "scan-line": "scan-line 1.6s linear infinite",
+        "phoneme-tick": "phoneme-tick 900ms ease-in-out infinite",
+        "wave-pulse": "wave-pulse 600ms ease-in-out infinite",
+        "hairline": "hairline 400ms ease-out forwards",
       },
     },
   },

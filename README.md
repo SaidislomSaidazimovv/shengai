@@ -1,224 +1,198 @@
-# ShengAI 声AI
+# OVOZ
 
-> AI-powered Mandarin Chinese pronunciation trainer with real-time pitch curve analysis, per-phoneme scoring, and adaptive drilling. Built for the **Build with AI EdTech Hackathon 2026** (General Education track).
+> **Hear yourself speak perfect Mandarin — diagnosed by your L1.**
+> Built for the Build with AI EdTech Hackathon 2026 · General Education track · New Uzbekistan University.
 
-**Live demo:** _to be added after Vercel deploy_
-**Track:** General Education
-**Team:** _add team members here_
+A 10-second loop: **SPEAK → DIAGNOSE → GOLDEN VOICE → MIRROR.** You read a Mandarin sentence, an L1-aware phoneme card slams in, your own cloned voice plays the corrected version, then a webcam mirror closes the lip gap.
 
----
-
-## The Problem
-
-Mainstream language apps (Duolingo, Babbel) fail at Mandarin **tones**. Learners get false-positive feedback — the app says "correct" even when pronunciation is wrong. Result: years of fossilized bad habits. Specialized tools exist (TonePerfect, CPAIT, Speechling) but each solves only part of the problem, are mobile-only, English-only, and lack adaptive drilling based on a learner's specific weaknesses.
-
-## Our Solution
-
-A **web-based** (no install), **fully responsive** pronunciation trainer that combines:
-
-1. **Real-time pitch curve overlay** — your voice vs. a native speaker, side-by-side
-2. **Per-syllable diagnosis** — initial / final / tone scored separately (not just "good/bad")
-3. **Adaptive drill engine** — content is selected based on *your* error patterns, not a fixed path
-4. **Native-language AI tutor** — Gemini explains mistakes in Uzbek / Russian / English
-
-## Differentiation vs Competitors
-
-| Feature | Duolingo | HelloChinese | TonePerfect | **ShengAI** |
-|---|---|---|---|---|
-| Pitch curve overlay | ❌ | ❌ | ✅ | ✅ |
-| Per-phoneme scoring | ❌ | partial | ✅ | ✅ |
-| Adaptive (error-based) | ❌ | ❌ | partial | ✅ |
-| Uzbek / RU / EN tutor | ❌ | ❌ | ❌ | ✅ |
-| Web-based | ❌ | ❌ | ✅ | ✅ |
-| Free diagnostic, no signup | ❌ | ❌ | ✅ | ✅ |
+OVOZ ("voice" in Uzbek) is built from Tashkent, for the 200M Russian and Turkic speakers no mainstream pronunciation app bothers with.
 
 ---
 
-## Tech Stack
+## The Demo (≤10 seconds, single screen)
 
-**Frontend** (`web/`)
-- React 19 + Vite + TypeScript
-- Tailwind CSS + shadcn/ui
-- React Router v6
-- Zustand (state)
-- Web Audio API (recording)
-- Pitchy.js (YIN pitch detection, client-side)
-- Recharts (pitch curve visualization)
+1. **SPEAK** — User reads the Mandarin sentence into the mic.
+2. **DIAGNOSE** — `RUSSIAN L1 DETECTED · Palatalization on /zh/` slams in. Signal red on black. Three seconds held.
+3. **GOLDEN VOICE** — The same person's timbre, now saying it correctly. Cloned with ElevenLabs Flash v2.5 from a separate L1 reference clip (never from the user's accented Mandarin — see the Reference Audio Trap below).
+4. **MIRROR** — Webcam + target lip overlay. The user mimics until the alignment locks.
 
-**Backend** (`api/`) — Vercel Python Serverless
-- Python 3.11
-- NumPy (DTW for pitch comparison)
-- google-generativeai (Gemini 2.0 Flash)
-
-**Auth + Sync** (optional)
-- Firebase Auth (Google sign-in)
-- Firestore (cross-device attempt history)
-- Falls back to localStorage when Firebase env vars are absent
-
-**Deploy:** Vercel (frontend + serverless API in one repo)
+The demo screen has at most: mic button, language toggle, sentence prompt, state visuals. That's it.
 
 ---
 
-## Setup & Run
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | Vite + React 19 + TypeScript + Tailwind |
+| State | Zustand (one global session machine) |
+| Audio capture | Web Audio API + WAV encoder (browser-native) |
+| **Phoneme MDD** | HuggingFace Inference API · `mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme` |
+| **L1 detection** | Hardcoded JSON keyed on user-picked language + demo sentence (see "The L1 Cheat" below) |
+| **Voice cloning** | ElevenLabs Flash v2.5 + Instant Voice Cloning |
+| **Lip tracking** | Webcam + target overlay (MediaPipe Face Mesh integration ready, falls back to static target) |
+| Backend | Vercel Python serverless (lightweight proxies for HF + ElevenLabs) |
+| Deploy | Vercel — one repo, frontend + serverless |
+
+---
+
+## The L1 Cheat (Honest Hackathon Note)
+
+Per the developer handover: **we are not building a real L1 classifier.** The phoneme MDD genuinely runs and finds a real articulation error. The L1 label and the diagnosis copy are picked from a JSON table keyed on (a) the language the user picked manually and (b) which of the three demo sentences they read.
+
+The illusion is honest because:
+- The phoneme error detection is real (HuggingFace wav2vec2).
+- The L1 label is what the user told us, not invented.
+- The diagnosis is grounded in published phonetic literature (citations in the card).
+
+If the HF endpoint is slow or unreachable, the diagnosis still triggers via fallback — we never lie to the user about the *L1* part because they told us; we lie to the demo about *which model produced the phoneme*.
+
+---
+
+## The Reference Audio Trap
+
+If we clone the user's voice from a recording of them speaking bad Mandarin, their L1 accent bleeds into the "golden" output. The golden voice still sounds Russian. The demo dies.
+
+**The fix** (per §3 of the dev handover): capture **two** recordings per session.
+
+1. **REFERENCE** — User reads 5–10 seconds in their native language (Russian or Uzbek). Sent to ElevenLabs for cloning.
+2. **TARGET** — User attempts the Mandarin sentence. Sent to HuggingFace for MDD.
+
+The reference capture is a separate sub-flow in the app (Step 0). The clone is cached for the rest of the session.
+
+---
+
+## Setup
 
 ### Prerequisites
-- Node.js 20+ and npm
-- Python 3.11+
-- A Google AI Studio API key for Gemini ([get one free here](https://aistudio.google.com/app/apikey))
+- Node.js 20+
+- Python 3.11+ (for `vercel dev` to run the serverless functions locally)
+- An [ElevenLabs](https://elevenlabs.io) account (Starter plan or higher — needs Instant Voice Cloning + Mandarin)
+- A [HuggingFace](https://huggingface.co) account with a free read-access token
 
-### 1. Clone & install
+### Install
 
 ```bash
-git clone <this-repo-url>
-cd shengai
+git clone https://github.com/SaidislomSaidazimovv/sheganai.git
+cd sheganai
+git checkout ovoz   # the OVOZ branch — main is the legacy ShengAI codebase
 
-# Frontend
-cd web
-npm install
-
-# Backend (optional for local dev — Vercel deploys it automatically)
-cd ../api
-pip install -r requirements.txt
+cd web && npm install
 ```
 
-### 2. Environment variables
+### Environment
 
-Copy `.env.example` to `.env` files:
+Copy `.env.example` to `api/.env` and `web/.env`, then fill in:
 
-```bash
-cp .env.example web/.env
-cp .env.example api/.env
+```
+# api/.env
+ELEVENLABS_API_KEY=...
+ELEVENLABS_MODEL=eleven_flash_v2_5
+HF_TOKEN=...
+HF_MDD_ENDPOINT=https://api-inference.huggingface.co/models/mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme
+
+# web/.env
+VITE_API_BASE_URL=
 ```
 
-Fill in your real `GEMINI_API_KEY` in `api/.env`. The frontend `.env` needs no secrets for local dev.
-
-### 3. Run locally
+### Run locally
 
 ```bash
-# Terminal 1 — frontend
-cd web
-npm run dev
-# → http://localhost:5173
-
-# Terminal 2 — backend (optional, fallback works without it)
-cd api
-uvicorn index:app --reload --port 8000
-# → http://localhost:8000
-```
-
-### 4. (Optional) Firebase setup for sign-in + sync
-
-Without Firebase the app works fully — progress lives in `localStorage`. To
-enable Google sign-in and cross-device sync:
-
-1. Create a project at [Firebase Console](https://console.firebase.google.com).
-2. **Build → Authentication → Sign-in method** → enable **Google**.
-3. **Build → Firestore Database** → create database (production mode).
-4. Copy security rules from `firestore.rules` into the **Rules** tab and publish.
-5. **Project Settings → Your apps → Web app** → copy the config keys into
-   `web/.env`:
-
-   ```
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=<project-id>.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=<project-id>
-   VITE_FIREBASE_APP_ID=...
-   ```
-
-6. Add your production domain (e.g. `<your-app>.vercel.app`) to
-   **Authentication → Settings → Authorized domains**.
-
-### 5. Deploy to Vercel
-
-```bash
+# Recommended: vercel dev — serves frontend + serverless on one port
 npm i -g vercel
+vercel link              # link to the OVOZ project once
+vercel dev               # http://localhost:3000
+
+# Or, frontend only (uses fallbacks for HF + ElevenLabs)
+cd web && npm run dev    # http://localhost:5173
+```
+
+### Deploy
+
+```bash
 vercel
 ```
 
-Add the following in the Vercel dashboard → Settings → Environment Variables:
-- `GEMINI_API_KEY` (Production, Preview, Development)
-- `GEMINI_MODEL=gemini-2.0-flash`
-- `ALLOWED_ORIGINS=https://<your-app>.vercel.app,http://localhost:5173`
-- All `VITE_FIREBASE_*` vars (if using Firebase)
+In the Vercel dashboard → Settings → Environment Variables, add the same keys as `api/.env`. Frontend `VITE_*` vars are baked at build time, so re-deploy after adding them.
 
 ---
 
-## AI & External Asset Disclosure
+## What we built vs the legacy ShengAI branch
 
-Per Hackathon rules (§10 Responsible AI, §6 disclosure):
+The repo started as **ShengAI** — a 6-page Mandarin pronunciation trainer with pitch curves, Firebase auth, and an adaptive drill engine. After advisor review we pivoted to OVOZ: single-screen clinical demo, voice cloning, lip mirror.
 
-| Component | What it is | Where it's used | Why |
-|---|---|---|---|
-| **Google Gemini 2.0 Flash** | LLM via `google-generativeai` SDK | `api/explain.py` — generates pronunciation feedback in user's native language | Translates raw pitch/phoneme scores into actionable advice |
-| **Pitchy.js** | Open-source YIN pitch detector (MIT) | `web/src/lib/pitch.ts` — client-side pitch extraction | Real-time pitch curve, no backend needed |
-| **Web Audio API** | Browser native | `web/src/lib/audio.ts` — microphone capture | Standard browser audio recording |
-| **DTW (Dynamic Time Warping)** | Custom NumPy implementation | `api/score.py` — compares user pitch curve to reference | Scoring tone accuracy |
-| **shadcn/ui** | Open-source React components (MIT) | `web/src/components/ui/` | UI primitives |
-| **Firebase Auth + Firestore** | Google BaaS | `web/src/lib/firebase.ts` | Optional Google sign-in + cross-device attempt sync |
-| **Pinyin reference data** | Public pinyin syllable table | `web/src/lib/data.ts` | 21 initials × 38 finals chart |
-| **Native audio samples** | Browser `SpeechSynthesis` API for demo | n/a | Reference pronunciation playback |
-
-**No private data, no user data sent to third parties beyond Gemini for the explanation text. No medical / grading / child-safety claims.**
-
-### Prompts used
-
-`api/explain.py` uses a structured prompt template; see source file. Prompts are versioned in the repo.
-
-### Limitations
-
-- Pitch detection accuracy depends on microphone quality and ambient noise. Headset recommended.
-- Initial/final scoring is heuristic (energy envelope + spectral features), not a trained phoneme classifier. We document this as a known limitation rather than overclaim.
-- Gemini explanations are LLM-generated and may occasionally be imprecise. Falls back to template-based feedback if API is unavailable.
-- Free tier limits apply (10 daily assessments) — designed for demo / hackathon judging.
-
-### Fallback Behavior
-
-If the backend `/api/explain` endpoint fails (network error, Gemini quota exceeded), the frontend automatically falls back to **template-based feedback** generated from the raw pitch/phoneme scores. The user always sees a usable result.
-
-If the backend `/api/score` endpoint fails, the frontend computes pitch DTW **entirely client-side** using Pitchy.js. The app remains functional offline.
+The ShengAI implementation lives on the `main` branch as a fallback. OVOZ lives here on `ovoz`.
 
 ---
 
-## Project Structure
+## Disclosure (Hackathon §10 Responsible AI)
+
+| Component | Where used | Why |
+|---|---|---|
+| **ElevenLabs Flash v2.5 + Instant Voice Cloning** | `api/clone.py`, `api/synth.py` — produces the "golden voice" | Sub-75ms TTS in user's own timbre |
+| **HuggingFace `mrrubino/wav2vec2-large-xlsr-53-l2-arctic-phoneme`** | `api/mdd.py` — phoneme-level error detection | Public, L2-tuned, no GPU on our side |
+| **Hardcoded L1 diagnosis JSON** | `web/src/lib/ovozData.ts` | Demo cheat per dev handover §5 — see "The L1 Cheat" above |
+| **MediaPipe Face Mesh** (planned wiring) | `web/src/components/stages/MirrorStage.tsx` | Lip articulation tracking |
+| **Web Audio API + WAV encoder** | `web/src/lib/audio.ts` | Browser-native microphone capture |
+| **shadcn/ui primitives** | `web/src/components/ui/` | MIT-licensed React components |
+
+**No private data sent to third parties.** Audio leaves the device for two reasons only: (a) the reference clone goes to ElevenLabs once, and (b) the target attempt goes to HuggingFace for MDD. We never persist either server-side.
+
+We make no medical claims, no learning-outcome guarantees, no grading guarantees. The product is a diagnostic visualization, not a certified teacher.
+
+### Failure modes
+
+| Failure | Mitigation |
+|---|---|
+| HF endpoint slow / down | Fallback diagnosis triggers via JSON table; UI never freezes. |
+| ElevenLabs latency > 6 s | Pre-rendered fallback audio per sentence (planned in `/public/demo-audio/`). |
+| ElevenLabs voice clone leaks accent | Reference Audio Trap fix — clone only from L1 reference. |
+| Webcam denied | Mirror step is skippable; UI continues to RESOLVED. |
+| All APIs down | Demo loop still walks IDLE → DIAGNOSIS → GOLDEN (fallback) → MIRROR (skip) → RESOLVED. |
+
+---
+
+## Project structure
 
 ```
-shengai/
-├── web/                  # Vite + React frontend
-│   ├── src/
-│   │   ├── pages/        # Landing, FreeTest, Practice, Dashboard, PinyinChart, Lesson
-│   │   ├── components/   # Recorder, PitchCurve, ScoreCard, PinyinChart, Layout
-│   │   ├── lib/          # audio, pitch, api, data
-│   │   ├── store/        # Zustand stores
-│   │   └── App.tsx
-│   ├── public/audio/     # native speaker reference audio
-│   └── package.json
-├── api/                  # Vercel Python serverless functions
-│   ├── score.py          # POST /api/score
-│   ├── explain.py        # POST /api/explain
-│   ├── _utils.py         # DTW, pitch helpers
+sheganai/
+├── api/                  # Vercel Python serverless
+│   ├── mdd.py           # POST /api/mdd     — HF wav2vec2 proxy
+│   ├── clone.py         # POST /api/clone   — ElevenLabs IVC
+│   ├── synth.py         # POST /api/synth   — ElevenLabs TTS
+│   ├── health.py        # POST /api/health  — capability probe
+│   ├── _utils.py        # CORS + multipart parser shared
 │   └── requirements.txt
-├── docs/                 # additional documentation
-├── vercel.json           # Vercel monorepo config
-├── .gitignore
+├── web/                  # Vite + React + Tailwind
+│   ├── src/
+│   │   ├── App.tsx              # Single-page state machine
+│   │   ├── components/
+│   │   │   ├── DiagnosisCard.tsx   # The unforgettable hero card
+│   │   │   ├── Header.tsx          # OVOZ wordmark + stage pill
+│   │   │   ├── LanguageToggle.tsx  # RU / UZ — the L1 cheat input
+│   │   │   ├── SentencePrompt.tsx  # Hanzi + pinyin centerpiece
+│   │   │   ├── Waveform.tsx        # Canvas bar waveform
+│   │   │   ├── stages/             # IDLE / RECORDING / ANALYZING / …
+│   │   │   └── ui/                 # button, badge, card
+│   │   ├── hooks/
+│   │   │   └── useRecorder.ts      # Mic + live RMS waveform
+│   │   ├── lib/
+│   │   │   ├── audio.ts            # WAV encoder + Recorder
+│   │   │   ├── api.ts              # Typed serverless client
+│   │   │   ├── ovozData.ts         # Demo sentences + L1 JSON
+│   │   │   └── utils.ts
+│   │   └── store/
+│   │       └── session.ts          # Zustand state machine
+│   └── package.json
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── DEMO_SCRIPT.md             # 4-minute pitch walkthrough
+│   └── PROMPTS.md                 # External LLM disclosure
+├── vercel.json
 ├── .env.example
-├── LICENSE               # MIT
-└── README.md             # you are here
+├── LICENSE                        # MIT
+└── README.md                      # you are here
 ```
-
----
-
-## Hackathon Compliance Checklist
-
-- [x] Project started during hackathon (no pre-built solution)
-- [x] Public repository with README.md
-- [x] Setup/run instructions
-- [x] Environment variable placeholders in `.env.example`
-- [x] No real API keys committed (`.env` in `.gitignore`)
-- [x] AI disclosure (Gemini, Pitchy, etc.)
-- [x] Open-source license (MIT)
-- [x] Fallback behavior for AI failures documented
-- [x] No private data, no unverified outcome claims
-- [ ] Final Google Slides link (added on submission day)
 
 ---
 
@@ -226,4 +200,4 @@ shengai/
 
 MIT — see `LICENSE`.
 
-Built with ❤️ at Build with AI EdTech Hackathon 2026, New Uzbekistan University.
+Built in Tashkent · Hackathon 2026.
