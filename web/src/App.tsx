@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/Header";
-import { IntroOverlay } from "@/components/IntroOverlay";
 import { StageView } from "@/components/StageView";
 import { IdleStage } from "@/components/stages/IdleStage";
 import { RecordingStage } from "@/components/stages/RecordingStage";
@@ -161,7 +160,6 @@ export default function App() {
   /* ----------- Render ----------- */
   return (
     <div className="min-h-screen flex flex-col bg-bg text-fg">
-      <IntroOverlay />
       <Header />
       <main className="flex-1 relative">
         {mode === "reference" ? (
