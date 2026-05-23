@@ -60,6 +60,17 @@ function getCtor(): SpeechRecognitionCtor | null {
 }
 
 export function isSpeechRecognitionSupported(): boolean {
+  // Debug toggle: visiting "/?asr=hf" forces the HuggingFace Whisper
+  // fallback path so we can validate the server-side ASR even on
+  // Chrome where the browser engine would otherwise win the race.
+  if (typeof window !== "undefined") {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("asr") === "hf") return false;
+    } catch {
+      // ignore — fall through to native detection
+    }
+  }
   return getCtor() !== null;
 }
 
