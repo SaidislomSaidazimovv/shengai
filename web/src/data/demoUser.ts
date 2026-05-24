@@ -24,7 +24,7 @@ export interface DemoUser {
 }
 
 export const DEMO_USER: DemoUser = {
-  voiceId: null,
-  voiceName: null,
-  clonedAt: null,
+  voiceId: "7XZI42EXXCNtSTZu8yVz",
+  voiceName: "sheng-uzbek",
+  clonedAt: "2026-05-24T06:05:24.000Z",
 };
