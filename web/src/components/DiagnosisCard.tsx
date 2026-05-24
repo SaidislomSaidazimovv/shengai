@@ -52,20 +52,22 @@ export function DiagnosisCard({ diagnosis, hero = true }: Props) {
         Trigger phoneme · <span className="text-fg/80">/{diagnosis.triggerPhoneme}/</span>
       </div>
 
-      {/* Headline — signal red, heavy condensed, screaming */}
+      {/* Headline — signal red, heavy condensed, screaming.
+          v02 §5.3 text-display (80px / 0.95 line / weight 700). */}
       <h1
         className={cn(
-          "font-stamp text-signal leading-[0.95]",
-          hero ? "text-6xl md:text-7xl" : "text-4xl"
+          "font-stamp text-signal tracking-tightest",
+          hero ? "text-display" : "text-4xl"
         )}
       >
         {diagnosis.headline}
       </h1>
 
-      {/* Subhead — clinical descriptor */}
+      {/* Subhead — clinical descriptor.
+          v02 §5.3 text-title (32px / 1.1 line / weight 500). */}
       <div className={cn(
-        "font-stamp text-fg leading-tight mt-4",
-        hero ? "text-3xl md:text-4xl" : "text-xl"
+        "font-stamp text-fg mt-4",
+        hero ? "text-title" : "text-xl"
       )}>
         {diagnosis.subhead}
       </div>
@@ -76,10 +78,11 @@ export function DiagnosisCard({ diagnosis, hero = true }: Props) {
         <div className="absolute inset-y-0 left-0 bg-signal animate-hairline" />
       </div>
 
-      {/* Detail — muted, reads like physician notes */}
+      {/* Detail — muted, reads like physician notes.
+          v02 §5.3 text-body-lg (20px / 1.4 line). */}
       <p className={cn(
-        "text-fg/60 font-data leading-relaxed",
-        hero ? "text-base md:text-lg" : "text-sm"
+        "text-fg/60 font-data",
+        hero ? "text-body-lg" : "text-sm"
       )}>
         {diagnosis.detail}
       </p>

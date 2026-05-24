@@ -44,6 +44,42 @@
   --tracking-tightest: -0.04em;
   --tracking-tighter:  -0.025em;
 
+  /* Type scale per Mirror DevHandover v02 §5.3 — the only sizes a
+     component should use. Tailwind v4 wires --text-{name} into the
+     `text-{name}` utility, --text-{name}--line-height into the line
+     height, and --text-{name}--font-weight into the weight. */
+  --text-mega: 128px;
+  --text-mega--line-height: 0.9;
+  --text-mega--font-weight: 700;
+
+  --text-display: 80px;
+  --text-display--line-height: 0.95;
+  --text-display--font-weight: 700;
+
+  --text-hero: 56px;
+  --text-hero--line-height: 1.0;
+  --text-hero--font-weight: 600;
+
+  --text-title: 32px;
+  --text-title--line-height: 1.1;
+  --text-title--font-weight: 500;
+
+  --text-body-lg: 20px;
+  --text-body-lg--line-height: 1.4;
+  --text-body-lg--font-weight: 400;
+
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-body--font-weight: 400;
+
+  --text-meta: 14px;
+  --text-meta--line-height: 1.4;
+  --text-meta--font-weight: 500;
+
+  --text-micro: 12px;
+  --text-micro--line-height: 1.3;
+  --text-micro--font-weight: 500;
+
   /* Container — v3 had screens.2xl: 1440px override. v4 equivalent. */
   --container-2xl: 1440px;
 
@@ -70,13 +106,14 @@
   100% { width: 100%; }
 }
 
-/* v4 `.container` is bare (just responsive max-width). Our v3 setup
-   had {center: true, padding: "1.5rem"} which auto-centered and added
-   horizontal padding. Replicate that here via @utility so existing
-   `<div className="container ...">` usage keeps centering and padding. */
+/* v4 `.container` is bare (just responsive max-width). Mirror
+   DevHandover v02 §5.4 locks the container at 1200px max-width with
+   48px horizontal padding on desktop. We pin both here so existing
+   `<div className="container ...">` usage matches the spec. */
 @utility container {
   margin-inline: auto;
-  padding-inline: 1.5rem;
+  padding-inline: 3rem; /* 48px per v02 §5.4 */
+  max-width: 1200px;    /* v02 §5.4 page container */
 }
 
 @layer base {
@@ -139,6 +176,30 @@
       linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     background-size: 24px 24px;
+  }
+
+  /* Mirror DevHandover v02 §5.6 wireframe mesh motif:
+     2px circles, fg-tertiary at 40% opacity, on a 12px grid. The dark
+     theme uses white dots (the dark equivalent of "fg-tertiary"). */
+  .bg-mesh-dots {
+    background-image: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.16) 1px,
+      transparent 1.5px
+    );
+    background-size: 12px 12px;
+    background-position: 0 0;
+  }
+
+  /* Subtle dot-grid corner accent (decorative). Apply with a fixed
+     width/height container; the gradient tiles to fill. */
+  .mesh-corner {
+    background-image: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.22) 1px,
+      transparent 1.5px
+    );
+    background-size: 8px 8px;
   }
 
   .text-balance {

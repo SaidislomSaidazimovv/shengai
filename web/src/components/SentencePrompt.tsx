@@ -36,13 +36,21 @@ export function SentencePrompt({ allowSwitch = true }: { allowSwitch?: boolean }
         )}
 
         <div>
-          <div className="font-cjk text-6xl md:text-7xl tracking-tight text-balance leading-none">
+          {/* v02 §6.2 — Mandarin sentence at text-mega (128px) in IDLE,
+              text-display (80px) in RECORDING. Desktop-only per §13. */}
+          <div
+            className={cn(
+              "font-cjk tracking-tightest text-balance",
+              allowSwitch ? "text-7xl md:text-mega" : "text-6xl md:text-display"
+            )}
+          >
             {sentence.hanzi}
           </div>
-          <div className={cn("font-data text-fg/60 mt-5 text-base md:text-lg tracking-wide")}>
+          {/* v02 §5.3 text-body-lg (20px) — the pinyin subtitle. */}
+          <div className="font-data text-fg/60 mt-5 text-body-lg tracking-wide">
             {sentence.pinyin}
           </div>
-          <div className="font-data text-fg/30 text-xs mt-2 uppercase tracking-[0.2em]">
+          <div className="font-data text-fg/30 text-micro mt-2 uppercase tracking-[0.2em]">
             {sentence.translation}
           </div>
         </div>

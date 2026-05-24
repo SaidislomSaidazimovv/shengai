@@ -30,12 +30,34 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
 
         <div className="mt-16 flex flex-col items-center gap-6">
           <div className="relative">
+            {/* v02 §5.6 mesh motif — corner accents framing the mic. */}
+            <div
+              className="absolute -top-6 -left-6 w-10 h-10 mesh-corner pointer-events-none"
+              aria-hidden
+            />
+            <div
+              className="absolute -top-6 -right-6 w-10 h-10 mesh-corner pointer-events-none"
+              aria-hidden
+            />
+            <div
+              className="absolute -bottom-6 -left-6 w-10 h-10 mesh-corner pointer-events-none"
+              aria-hidden
+            />
+            <div
+              className="absolute -bottom-6 -right-6 w-10 h-10 mesh-corner pointer-events-none"
+              aria-hidden
+            />
             <button
               onClick={onStartRecording}
               className="relative grid place-items-center w-32 h-32 rounded-full bg-signal text-fg hover:bg-signal-600 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-4 focus-visible:ring-offset-bg"
               aria-label="Start recording"
             >
-              <Mic className="h-12 w-12" strokeWidth={1.5} />
+              {/* v02 §5.6 — subtle mesh dots inside the mic button. */}
+              <span
+                className="absolute inset-2 rounded-full bg-mesh-dots opacity-50 pointer-events-none"
+                aria-hidden
+              />
+              <Mic className="h-12 w-12 relative" strokeWidth={1.5} />
             </button>
           </div>
 
