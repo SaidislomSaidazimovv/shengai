@@ -34,8 +34,10 @@
 
 @layer utilities {
   .font-stamp {
-    font-family: "Archivo Narrow", "Archivo", sans-serif;
-    font-weight: 800;
+    /* v02 §5.3 display protagonist — Switzer is the Fontshare-licensed
+       fallback for PP Neue Montreal. */
+    font-family: "PP Neue Montreal", "Switzer", system-ui, sans-serif;
+    font-weight: 700;
     letter-spacing: -0.025em;
     text-transform: uppercase;
   }

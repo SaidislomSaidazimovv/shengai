@@ -11,9 +11,11 @@
  *   - 3 seconds held — handled by the caller, not by this component.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { motion } from "motion/react";
 import { cn, timestamp } from "@/lib/utils";
 import type { Diagnosis } from "@/lib/demoData";
+import { transitions, variants } from "@/motion/presets";
 
 interface Props {
   diagnosis: Diagnosis;
@@ -26,11 +28,12 @@ export function DiagnosisCard({ diagnosis, hero = true }: Props) {
   const [stampedAt] = useState<string>(() => timestamp());
 
   return (
-    <div
-      className={cn(
-        "relative w-full max-w-2xl mx-auto",
-        hero && "animate-slam-in"
-      )}
+    <motion.div
+      initial={hero ? "hidden" : false}
+      animate="visible"
+      variants={variants.diagnosisCard}
+      transition={transitions.diagnosis}
+      className={cn("relative w-full max-w-2xl mx-auto")}
     >
       {/* Top instrument header — corner registration marks + meta line */}
       <div className="flex items-center justify-between border-b border-line/60 pb-3 mb-8 font-data text-[10px] tracking-[0.2em] uppercase text-fg/40">
@@ -98,7 +101,7 @@ export function DiagnosisCard({ diagnosis, hero = true }: Props) {
           <CornerMark inverted mirrored />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

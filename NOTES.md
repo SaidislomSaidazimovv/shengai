@@ -172,6 +172,18 @@ brand sticks.
 
 ## Lessons we paid for (don't lose these)
 
+### `@mediapipe/tasks-vision` IS the modern face_mesh + camera_utils
+The Mirror DevHandover v02 §2 stack table names
+`@mediapipe/face_mesh + @mediapipe/camera_utils` as the face-tracking
+choice. Google deprecated those two packages in 2024 and replaced
+them with a single unified package: `@mediapipe/tasks-vision`. It is
+what we install. `FaceLandmarker.createFromOptions(...)` returns the
+same 468-landmark mesh; webcam handling we do directly via
+`getUserMedia`, which is what `camera_utils` wrapped anyway. Rolling
+back to the deprecated packages would be a regression — keep
+`tasks-vision`. Treat §2 stack item #8 as satisfied via the modern
+equivalent.
+
 ### HF Inference API moved
 The legacy `api-inference.huggingface.co` host was retired in
 the 2024-12 Inference Providers migration. Always use

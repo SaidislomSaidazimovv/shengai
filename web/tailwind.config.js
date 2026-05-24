@@ -36,10 +36,13 @@ export default {
         line: "#2a2a2a",
       },
       fontFamily: {
-        display: ["'Archivo Narrow'", "'Archivo'", "ui-sans-serif"],
+        // Per Mirror DevHandover v02 §5.3: PP Neue Montreal is the
+        // protagonist; Switzer (Fontshare, free, very similar Swiss-modern
+        // feel) is the explicit fallback. Inter is forbidden.
+        display: ["'PP Neue Montreal'", "'Switzer'", "system-ui", "sans-serif"],
+        sans: ["'PP Neue Montreal'", "'Switzer'", "system-ui", "sans-serif"],
         mono: ["'JetBrains Mono'", "'Söhne Mono'", "ui-monospace", "monospace"],
         cjk: ["'Noto Sans SC'", "'PingFang SC'", "ui-sans-serif"],
-        sans: ["'Inter'", "ui-sans-serif", "system-ui"],
       },
       letterSpacing: {
         tightest: "-0.04em",
