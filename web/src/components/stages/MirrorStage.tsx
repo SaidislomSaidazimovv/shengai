@@ -180,17 +180,19 @@ export function MirrorStage({ onDone, onSkip }: Props) {
     if (boostedAlignment >= 80) setStatus("matched");
   }, [boostedAlignment, status]);
 
-  // 3b. Record the peak alignment so the RESOLVED report can show the
-  // best the user reached during the mirror step.
+  // 3b. Record the peak alignment for the RESOLVED report. Uses the
+  // RAW tracker.alignment, NOT the boostedAlignment — the boost ramp
+  // is a visual demo cheat (always reach 95 on screen) and would lie
+  // in the post-session report. The report stays honest.
   useEffect(() => {
-    const current = Math.round(boostedAlignment);
+    const current = Math.round(tracker.alignment);
     if (peakSoFar === null || current > peakSoFar) {
       setPeakMirrorAlignmentPct(current);
     }
     // peakSoFar is updated by this same effect; intentionally read-only
     // dependency so we only refire when alignment moves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boostedAlignment]);
+  }, [tracker.alignment]);
 
   // MIRROR stage: no auto-advance. User watches the synthetic avatar
   // mouth the sentence, mimics it on the right, and clicks "Lock in

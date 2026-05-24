@@ -32,12 +32,20 @@ import { useState } from "react";
 import { motion, type Variants } from "motion/react";
 import { cn, timestamp } from "@/lib/utils";
 import type { Diagnosis, L1 } from "@/lib/demoData";
+import { L1_PHONEME_SUBSTITUTIONS } from "@/lib/demoData";
 import { ease } from "@/motion/presets";
 
 interface Props {
   diagnosis: Diagnosis;
   /** The L1 the user picked — drives the pattern-family copy. */
   l1?: L1;
+  /**
+   * The phoneme actually triggered by the live ASR diff. When set, the
+   * card's phoneme-shift box uses this real value (looking up the L1's
+   * typical substitution) instead of the static `diagnosis.phonemeShift`.
+   * Without it the box falls back to the sentence-level scripted shift.
+   */
+  triggeredPhoneme?: string | null;
   /** When true, the card is in screen-takeover hero mode. */
   hero?: boolean;
 }
@@ -98,9 +106,31 @@ const L1_NAME: Record<L1, string> = {
   uzbek: "Uzbek",
 };
 
-export function DiagnosisCard({ diagnosis, l1 = "russian", hero = true }: Props) {
+export function DiagnosisCard({
+  diagnosis,
+  l1 = "russian",
+  triggeredPhoneme = null,
+  hero = true,
+}: Props) {
   // Stamp a deterministic "patient id" so the card feels like a reading.
   const [stampedAt] = useState<string>(() => timestamp());
+
+  // Build the phoneme-shift display dynamically when a real triggered
+  // phoneme is available. expected = the phoneme the user was supposed
+  // to produce; detected = the L1-typical substitution for that phoneme
+  // (from L1_PHONEME_SUBSTITUTIONS). If the trigger isn't in our
+  // substitution table or we don't have one, fall back to the scripted
+  // sentence-level shift hardcoded in demoData.
+  const shift = (() => {
+    if (triggeredPhoneme) {
+      const sub = L1_PHONEME_SUBSTITUTIONS[l1][triggeredPhoneme];
+      if (sub) return { expected: triggeredPhoneme, detected: sub };
+      // Known phoneme but no L1 substitution mapping — show the trigger
+      // alone so the box still reflects the live signal.
+      return { expected: triggeredPhoneme, detected: "—" };
+    }
+    return diagnosis.phonemeShift;
+  })();
 
   return (
     <motion.div
@@ -187,13 +217,13 @@ export function DiagnosisCard({ diagnosis, l1 = "russian", hero = true }: Props)
         className="mt-8 bg-muted rounded-md p-6 flex items-center gap-4 font-mono"
       >
         <span className="text-2xl text-fg tracking-tighter">
-          {diagnosis.phonemeShift.expected}
+          {shift.expected}
         </span>
         <span className="text-fg/40" aria-hidden>
           →
         </span>
         <span className="text-2xl text-signal tracking-tighter">
-          {diagnosis.phonemeShift.detected}
+          {shift.detected}
         </span>
         <span className="ml-auto text-micro uppercase tracking-[0.2em] text-fg/40">
           Expected vs detected

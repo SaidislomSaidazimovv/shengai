@@ -24,6 +24,7 @@ interface Props {
 export function DiagnosisStage({ onTutorLanguageChange, onContinue }: Props) {
   const l1 = useSession((s) => s.l1);
   const sentenceId = useSession((s) => s.sentenceId);
+  const triggeredPhoneme = useSession((s) => s.triggeredPhoneme);
   const sentence = getDemoSentence(sentenceId);
 
   if (!sentence) return null;
@@ -31,7 +32,12 @@ export function DiagnosisStage({ onTutorLanguageChange, onContinue }: Props) {
 
   return (
     <div className="container py-14 grid place-items-center">
-      <DiagnosisCard diagnosis={diagnosis} l1={l1} hero />
+      <DiagnosisCard
+        diagnosis={diagnosis}
+        l1={l1}
+        triggeredPhoneme={triggeredPhoneme}
+        hero
+      />
 
       <AITutorPanel onLanguageChange={onTutorLanguageChange} />
 

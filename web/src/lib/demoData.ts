@@ -166,6 +166,43 @@ export const L1_LABELS: Record<L1, { code: string; name: string; nativeName: str
 };
 
 /**
+ * L1-specific phoneme substitution map.
+ *
+ * For each known Mandarin target phoneme, what a native speaker of
+ * `l1` typically produces instead. The Diagnosis card uses this to
+ * render the "expected → detected" box dynamically based on the
+ * real triggered phoneme (from char-diff ASR), not the hardcoded
+ * sentence-level shift. Grounded in the same phonetic literature
+ * we cite on the card.
+ *
+ * If a triggered phoneme is missing from this table, the card just
+ * shows the target by itself.
+ */
+export const L1_PHONEME_SUBSTITUTIONS: Record<L1, Record<string, string>> = {
+  russian: {
+    "ʈʂ": "ʐʲ",       // retroflex zh palatalized
+    "ʂ":  "ʂʲ",       // retroflex sh palatalized
+    "tɕ": "tɕʲ",      // alveolo-palatal j slightly fronted
+    "ɕ":  "sʲ",       // alveolo-palatal x → softened s
+    "y":  "u",        // ü → u (no front-rounded)
+    "ɤ":  "o",        // back-mid unrounded → o
+    "ɻ":  "r",        // approximant r → Russian r
+    "ŋ":  "n",        // velar nasal flattened
+    "au": "a",        // diphthong simplified
+  },
+  uzbek: {
+    "y":  "u",        // ü → u (vowel inventory gap)
+    "ʈʂ": "ʂ",        // retroflex zh flattened to sh
+    "ʂ":  "ʃ",        // retroflex sh → plain sh
+    "tɕ": "tʃ",       // alveolo-palatal j → ch
+    "ɕ":  "ʃ",        // alveolo-palatal x → sh
+    "ɤ":  "o",        // back-mid → o
+    "ɻ":  "r",        // approximant → r
+    "ŋ":  "ng",       // velar nasal → ng cluster
+  },
+};
+
+/**
  * Short reference sentences in each L1, taken verbatim from Mirror
  * DevHandover v02 §6.1. Logistics + Chinese-partner framing matches
  * §12 revenue narrative (B2B ВЭД teams trading with China). Recorded
