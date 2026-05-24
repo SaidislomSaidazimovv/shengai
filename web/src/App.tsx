@@ -102,6 +102,7 @@ export default function App() {
 
       let transcript = browserAsr.transcript;
       let provider: "browser" | "huggingface" | "none" = "none";
+      let reason: string | null = null;
 
       const browserUsable = browserAsr.supported && transcript.length > 0;
       const browserGaveUpEarly =
@@ -117,14 +118,23 @@ export default function App() {
           if (hf.transcript) {
             transcript = hf.transcript;
             provider = "huggingface";
+            reason = hf.source;
+          } else {
+            // HF call succeeded but returned empty — capture why for debug.
+            reason = `hf · ${hf.source}${hf.reason ? ` · ${hf.reason}` : ""}`;
           }
-        } catch {
-          // Network/timeout — leave transcript empty, route to no-speech.
+        } catch (err) {
+          reason = `hf · network · ${err instanceof Error ? err.message : "unknown"}`;
         }
+      } else if (!browserAsr.supported) {
+        reason = "browser · unsupported";
+      } else {
+        reason = `browser · ${browserAsr.error ?? "no-speech"}`;
       }
 
       session.setLastTranscript(transcript);
       session.setAsrProvider(provider);
+      session.setAsrReason(reason);
 
       const mismatchCharIdx = findFirstMismatch(sentence.hanzi, transcript);
       const noSpeech = transcript.length === 0;

@@ -69,7 +69,9 @@ export const api = {
   async asr(audio: Blob): Promise<AsrResponse> {
     const fd = new FormData();
     fd.append("audio", audio, "target.webm");
-    return postWithTimeout<AsrResponse>("/api/asr", fd, 30000);
+    // 90s — HF Whisper cold start can hit 60s + transcription time.
+    // The backend sends `x-wait-for-model: true` so HF holds until ready.
+    return postWithTimeout<AsrResponse>("/api/asr", fd, 90000);
   },
 
   async cloneVoice(reference: Blob, label: string): Promise<CloneResponse> {

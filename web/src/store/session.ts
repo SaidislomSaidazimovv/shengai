@@ -87,6 +87,10 @@ interface SessionState {
   asrProvider: "browser" | "huggingface" | "none";
   setAsrProvider: (p: "browser" | "huggingface" | "none") => void;
 
+  /** Reason string from the failing ASR call — shown in NoSpeechStage for debug. */
+  asrReason: string | null;
+  setAsrReason: (r: string | null) => void;
+
   golden: GoldenClip | null;
   setGolden: (g: GoldenClip | null) => void;
 
@@ -115,6 +119,7 @@ export const useSession = create<SessionState>((set) => ({
       triggeredPhonemeIdx: null,
       lastTranscript: "",
       asrProvider: "none",
+      asrReason: null,
       golden: null,
     }),
 
@@ -138,6 +143,9 @@ export const useSession = create<SessionState>((set) => ({
 
   asrProvider: "none",
   setAsrProvider: (asrProvider) => set({ asrProvider }),
+
+  asrReason: null,
+  setAsrReason: (asrReason) => set({ asrReason }),
 
   golden: null,
   setGolden: (golden) => set({ golden }),

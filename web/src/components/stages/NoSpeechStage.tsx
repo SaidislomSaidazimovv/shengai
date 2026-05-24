@@ -1,6 +1,7 @@
 import { ArrowLeft, Mic, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/store/session";
 
 interface Props {
   onRetry: () => void;
@@ -11,8 +12,15 @@ interface Props {
  * timeout, or unsupported). We do not lie with a fake diagnosis here —
  * per DEV_HANDOVER §5 the phoneme signal must be real; without it we
  * surface the absence clearly and invite a retry.
+ *
+ * For debugging we also display the reason the upstream engine gave —
+ * "hf · fallback · model_cold_start", "browser · no-speech", etc. —
+ * so a teammate can tell at a glance whether it's a real silence or a
+ * platform issue.
  */
 export function NoSpeechStage({ onRetry }: Props) {
+  const reason = useSession((s) => s.asrReason);
+
   return (
     <div className="container py-20 grid place-items-center text-center">
       <div className="max-w-xl">
@@ -31,7 +39,13 @@ export function NoSpeechStage({ onRetry }: Props) {
           conversational volume, and we'll diagnose what we hear.
         </p>
 
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+        {reason && (
+          <div className="mt-6 inline-block font-data text-[10px] uppercase tracking-[0.18em] text-fg/40 border border-line px-3 py-2">
+            engine · {reason}
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Button variant="outline" size="lg" onClick={onRetry}>
             <ArrowLeft className="h-4 w-4" /> Back to idle
           </Button>
