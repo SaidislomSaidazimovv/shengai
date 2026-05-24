@@ -43,10 +43,13 @@ export function RecordingStage({ liveSamples, elapsed, maxSeconds, onStop, label
           <Waveform samples={liveSamples} tone="signal" height={100} />
         </div>
 
-        <div className="mt-10 flex justify-center">
+        <div className="mt-10 flex flex-col items-center gap-3">
           <Button variant="outline" size="lg" onClick={onStop}>
             <Square className="h-4 w-4" fill="currentColor" /> Stop
           </Button>
+          <div className="font-data text-[10px] uppercase tracking-[0.22em] text-fg/40">
+            Release <kbd className="px-1.5 py-0.5 border border-line text-fg/60 font-data">SPACE</kbd> to stop
+          </div>
         </div>
       </div>
     </div>

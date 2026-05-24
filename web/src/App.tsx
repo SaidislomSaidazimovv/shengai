@@ -11,6 +11,7 @@ import { MirrorStage } from "@/components/stages/MirrorStage";
 import { ResolvedStage } from "@/components/stages/ResolvedStage";
 import { ReferenceStage } from "@/components/stages/ReferenceStage";
 import { useRecorder } from "@/hooks/useRecorder";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useSession, type TutorLanguage } from "@/store/session";
 import { api } from "@/lib/api";
 import { getDemoSentence } from "@/lib/demoData";
@@ -306,6 +307,36 @@ export default function App() {
     }
     setMode("main");
   }, [refRec, session]);
+
+  /* ----------- Keyboard shortcuts (v02 §4 / §6.2 / §6.3) ----------- */
+  // Map the current stage to the right action set so Space / Enter / Esc
+  // drive the entire loop without touching the mouse.
+  const stageAdvance =
+    session.stage === "diagnosis"
+      ? onDiagnosisContinue
+      : session.stage === "golden"
+        ? onGoldenContinue
+        : session.stage === "mirror"
+          ? onMirrorDone
+          : session.stage === "resolved"
+            ? onResolvedAgain
+            : session.stage === "no_speech"
+              ? () => session.reset()
+              : undefined;
+
+  useKeyboardShortcuts({
+    enabled: mode === "main",
+    spaceMode:
+      session.stage === "idle"
+        ? "start"
+        : session.stage === "recording"
+          ? "stop"
+          : null,
+    onStartRecord: onStartRecording,
+    onStopRecord: onStopRecording,
+    onAdvance: stageAdvance,
+    onReset: () => session.reset(),
+  });
 
   /* ----------- Cleanup on unmount ----------- */
   useEffect(() => {

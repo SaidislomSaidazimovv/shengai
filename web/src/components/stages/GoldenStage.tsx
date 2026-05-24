@@ -38,6 +38,12 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
   const [audioMissing, setAudioMissing] = useState(false);
   const [pulse, setPulse] = useState<number[]>([]);
 
+  // Mirror DevHandover v02 §6.6: "On audio end: 400ms hold, then
+  // transition to AVATAR_MIRROR." Ref so the timer keeps the latest
+  // onContinue across re-renders without re-firing.
+  const onContinueRef = useRef(onContinue);
+  onContinueRef.current = onContinue;
+
   // Wire the <audio> element into a WebAudio AnalyserNode the first
   // time it's available; this lets us drive a real RMS waveform from
   // whatever's actually playing instead of faking it with Math.sin.
@@ -176,6 +182,8 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
               onEnded={() => {
                 setPlaying(false);
                 setDone(true);
+                // 400ms hold, then auto-advance to MIRROR.
+                setTimeout(() => onContinueRef.current(), 400);
               }}
               onError={() => setAudioMissing(true)}
               className="hidden"

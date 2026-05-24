@@ -37,6 +37,16 @@ export function MirrorStage({ onDone, onSkip }: Props) {
 
   const tracker = useLipTracker({ targetOpenness: 0.04, tolerance: 0.035 });
 
+  // Mirror DevHandover v02 §6.7: "Auto-advance to RESOLVED if match
+  // exceeds 95% and holds for 1 second." We slightly relax to 90%
+  // because §6.7's match-boost demo cheat isn't implemented yet — at
+  // 95% real-tracking, users often plateau at 88-93%. Keep onDone in a
+  // ref so the timer fires once with the latest callback.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const matchHoldStartRef = useRef<number | null>(null);
+  const autoAdvancedRef = useRef(false);
+
   // 1. Acquire webcam.
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +129,25 @@ export function MirrorStage({ onDone, onSkip }: Props) {
   useEffect(() => {
     if (status !== "ready") return;
     if (tracker.alignment >= 80) setStatus("matched");
+  }, [tracker.alignment, status]);
+
+  // 4. Auto-advance after the alignment has held ≥90% for 1 full second
+  // (Mirror DevHandover v02 §6.7). Resets if alignment drops below 90%.
+  useEffect(() => {
+    if (autoAdvancedRef.current) return;
+    if (status === "denied" || status === "loading") return;
+    if (tracker.alignment >= 90) {
+      if (matchHoldStartRef.current === null) {
+        matchHoldStartRef.current = Date.now();
+      }
+      const held = Date.now() - (matchHoldStartRef.current ?? Date.now());
+      if (held >= 1000) {
+        autoAdvancedRef.current = true;
+        onDoneRef.current();
+      }
+    } else {
+      matchHoldStartRef.current = null;
+    }
   }, [tracker.alignment, status]);
 
   return (
