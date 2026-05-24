@@ -2,12 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd web && npm install && npm run build",
   "outputDirectory": "web/dist",
-  "functions": {
-    "api/asr.py": { "maxDuration": 60 },
-    "api/clone.py": { "maxDuration": 30 },
-    "api/synth.py": { "maxDuration": 30 },
-    "api/health.py": { "maxDuration": 10 }
-  },
   "rewrites": [
     { "source": "/((?!api/)[^.]*)", "destination": "/index.html" }
   ]
