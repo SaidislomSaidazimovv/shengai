@@ -14,6 +14,7 @@ import { useRecorder } from "@/hooks/useRecorder";
 import { useSession, type TutorLanguage } from "@/store/session";
 import { api } from "@/lib/api";
 import { getDemoSentence } from "@/lib/demoData";
+import { DEMO_USER } from "@/data/demoUser";
 import { sleep } from "@/lib/utils";
 import {
   findFirstMismatch,
@@ -246,10 +247,14 @@ export default function App() {
     const sentence = getDemoSentence(session.sentenceId);
     if (!sentence) return;
 
-    // If we have a clone, hit synth. Otherwise, fall back to pre-rendered.
-    if (session.clone?.voiceId) {
+    // Prefer the live session clone (a fresh ReferenceStage capture in this
+    // tab), otherwise fall back to the hardcoded demo voice (Mirror
+    // DevHandover v02 §3 — pre-cloned on-stage user voice). Final fallback
+    // is the pre-rendered MP3 if neither voice is available.
+    const voiceId = session.clone?.voiceId ?? DEMO_USER.voiceId;
+    if (voiceId) {
       try {
-        const res = await api.synthesize(session.clone.voiceId, sentence.pinyin);
+        const res = await api.synthesize(voiceId, sentence.pinyin);
         const audio = base64ToBlobUrl(res.audioBase64, "audio/mpeg");
         session.setGolden({ url: audio, source: res.source });
         return;

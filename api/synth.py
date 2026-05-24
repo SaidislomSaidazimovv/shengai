@@ -52,10 +52,13 @@ def _call_elevenlabs(voice_id: str, text: str) -> dict[str, Any]:
             json={
                 "text": text,
                 "model_id": EL_MODEL,
+                # Per Mirror DevHandover v02 §14.2:
+                # "stability 0.55, similarity 0.85, style 0.0 (let the
+                # model render clean Mandarin tones, don't push style)."
                 "voice_settings": {
-                    "stability": 0.5,
+                    "stability": 0.55,
                     "similarity_boost": 0.85,
-                    "style": 0.2,
+                    "style": 0.0,
                     "use_speaker_boost": True,
                 },
             },

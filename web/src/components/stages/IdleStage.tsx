@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SentencePrompt } from "@/components/SentencePrompt";
 import { useSession } from "@/store/session";
+import { DEMO_USER } from "@/data/demoUser";
 
 interface Props {
   onStartRecording: () => void;
@@ -55,6 +56,8 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
             <ReferenceCard
               ok={!!reference}
               cloned={!!clone}
+              presetVoiceId={DEMO_USER.voiceId}
+              presetVoiceName={DEMO_USER.voiceName}
               onStart={onStartReference}
             />
             <BeliefCard />
@@ -65,22 +68,44 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
   );
 }
 
-function ReferenceCard({ ok, cloned, onStart }: { ok: boolean; cloned: boolean; onStart: () => void }) {
+interface ReferenceCardProps {
+  ok: boolean;
+  cloned: boolean;
+  presetVoiceId: string | null;
+  presetVoiceName: string | null;
+  onStart: () => void;
+}
+
+function ReferenceCard({ ok, cloned, presetVoiceId, presetVoiceName, onStart }: ReferenceCardProps) {
+  // Hardcoded preset voice (Mirror DevHandover v02 §3) takes effect only
+  // when this session has no fresh capture yet — a live ReferenceStage
+  // capture always wins. Surface the preset state so the user knows the
+  // Golden Voice step will work even without re-capturing.
+  const hasPreset = !!presetVoiceId && !ok;
+
+  const badgeVariant = ok ? "gold" : hasPreset ? "gold" : "signal";
+  const badgeLabel = ok
+    ? cloned
+      ? "VOICE CLONED"
+      : "REFERENCE OK"
+    : hasPreset
+      ? "PRESET VOICE READY"
+      : "MISSING";
+
   return (
     <div className="clinical-card clinical-card-interactive p-5">
       <div className="flex items-center justify-between mb-3">
         <span className="font-data text-[10px] uppercase tracking-[0.2em] text-fg/40">Step 0 · Reference</span>
-        <Badge variant={ok ? "gold" : "signal"}>
-          {ok ? (cloned ? "VOICE CLONED" : "REFERENCE OK") : "MISSING"}
-        </Badge>
+        <Badge variant={badgeVariant}>{badgeLabel}</Badge>
       </div>
       <div className="font-stamp text-2xl leading-tight mb-2">Capture native timbre first.</div>
       <p className="text-fg/50 text-sm font-data leading-relaxed mb-4">
-        Read a short paragraph in your own language so the golden voice clones your timbre
-        without your Mandarin accent leaking through.
+        {hasPreset
+          ? `Pre-cloned voice "${presetVoiceName ?? "demo"}" is wired in — Golden Voice plays this until you record a fresh reference.`
+          : "Read a short paragraph in your own language so the golden voice clones your timbre without your Mandarin accent leaking through."}
       </p>
       <Button variant="outline" size="sm" onClick={onStart}>
-        {ok ? "Re-capture reference" : "Capture reference"}
+        {ok ? "Re-capture reference" : hasPreset ? "Re-capture reference" : "Capture reference"}
       </Button>
     </div>
   );
