@@ -69,7 +69,15 @@ export function MatchScore({ value, className }: Props) {
   const crossed95 = shown >= 95;
 
   return (
-    <div className={cn("flex flex-col items-center", className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center rounded-lg px-8 py-4 transition-colors duration-300 ease-out",
+        // v02 §5.2 — success-soft halo when match ≥ 90. Subtle warm
+        // wash that pairs with the success-green text + text-shadow.
+        crossed90 ? "bg-success-soft" : "bg-transparent",
+        className
+      )}
+    >
       <motion.div
         animate={
           crossed95
@@ -81,7 +89,7 @@ export function MatchScore({ value, className }: Props) {
         transition={{ duration: 0.18, ease: ease.out }}
         className={cn(
           "font-mono text-hero tabular-nums transition-colors duration-300 ease-out",
-          crossed90 ? "text-[var(--color-success)]" : "text-fg"
+          crossed90 ? "text-success" : "text-fg"
         )}
         style={
           crossed90
@@ -96,7 +104,7 @@ export function MatchScore({ value, className }: Props) {
       <div
         className={cn(
           "font-data text-micro uppercase tracking-[0.22em] mt-2 transition-colors duration-300 ease-out",
-          crossed90 ? "text-[var(--color-success)]" : "text-fg/40"
+          crossed90 ? "text-success" : "text-fg/40"
         )}
       >
         Match

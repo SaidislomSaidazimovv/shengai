@@ -24,7 +24,8 @@ export function NoSpeechStage({ onRetry }: Props) {
   return (
     <div className="container py-20 grid place-items-center text-center">
       <div className="max-w-xl">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full border border-signal/50 bg-signal/10 mb-6">
+        {/* v02 §5.2 — signal-soft (#FDF2F2) as the warning halo. */}
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full border border-signal/50 bg-signal-soft mb-6">
           <AlertTriangle className="h-8 w-8 text-signal" strokeWidth={1.5} />
         </div>
 

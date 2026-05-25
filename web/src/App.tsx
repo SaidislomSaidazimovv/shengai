@@ -329,6 +329,32 @@ export default function App() {
               ? () => session.reset()
               : undefined;
 
+  // v02 §10 failure-insurance shortcuts.
+  // Cmd/Ctrl+Shift+D — killswitch: wipe session state, drop straight
+  // back to IDLE, force the demo into pre-rendered fallback mode.
+  const onKillswitch = useCallback(() => {
+    session.reset();
+    setMode("main");
+    // Tag the session so subsequent Golden Voice stages skip live
+    // ElevenLabs and go straight to the pre-rendered MP3 path.
+    session.setClone({ voiceId: "demo-fallback", source: "fallback" });
+    // eslint-disable-next-line no-console
+    console.warn("[Mirror §10] Killswitch fired — demo in fallback mode.");
+  }, [session]);
+
+  // Cmd/Ctrl+G — force Golden Voice to fall back to the pre-rendered
+  // MP3 for the current sentence, even if ElevenLabs is reachable.
+  const onForceGoldenFallback = useCallback(() => {
+    const sentence = getDemoSentence(session.sentenceId);
+    if (!sentence) return;
+    session.setGolden({
+      url: `/demo-audio/${sentence.id}.mp3`,
+      source: "prerendered",
+    });
+    // eslint-disable-next-line no-console
+    console.warn("[Mirror §10] Force-fallback fired — Golden Voice = MP3.");
+  }, [session]);
+
   useKeyboardShortcuts({
     enabled: mode === "main",
     spaceMode:
@@ -341,6 +367,8 @@ export default function App() {
     onStopRecord: onStopRecording,
     onAdvance: stageAdvance,
     onReset: () => session.reset(),
+    onKillswitch,
+    onForceGoldenFallback,
   });
 
   /* ----------- Cleanup on unmount ----------- */

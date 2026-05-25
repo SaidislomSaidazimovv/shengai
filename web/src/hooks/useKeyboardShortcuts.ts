@@ -31,6 +31,16 @@ interface Options {
   onAdvance?: () => void;
   /** Escape handler — typically session.reset(). */
   onReset?: () => void;
+  /**
+   * Cmd/Ctrl+Shift+D killswitch — Mirror v02 §10. Triggers full
+   * demo-from-recording mode (skip live APIs, play pre-renders).
+   */
+  onKillswitch?: () => void;
+  /**
+   * Cmd/Ctrl+G — Mirror v02 §10. Force Golden Voice to the
+   * pre-rendered MP3 fallback even if ElevenLabs is reachable.
+   */
+  onForceGoldenFallback?: () => void;
 }
 
 function isTextInputFocused(): boolean {
@@ -48,6 +58,8 @@ export function useKeyboardShortcuts({
   onStopRecord,
   onAdvance,
   onReset,
+  onKillswitch,
+  onForceGoldenFallback,
 }: Options) {
   // Track whether a Space keydown originated from this stage to avoid
   // the case where a user starts recording, the stage transitions, and
@@ -59,6 +71,28 @@ export function useKeyboardShortcuts({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTextInputFocused()) return;
+
+      // v02 §10 killswitch — Cmd/Ctrl+Shift+D fires the demo-from-
+      // recording mode regardless of the active stage. Caught before
+      // the per-key branches so it overrides everything.
+      const cmd = e.metaKey || e.ctrlKey;
+      if (cmd && e.shiftKey && (e.code === "KeyD" || e.key === "d" || e.key === "D")) {
+        if (onKillswitch) {
+          e.preventDefault();
+          onKillswitch();
+        }
+        return;
+      }
+      // v02 §10 — Cmd/Ctrl+G force Golden Voice to the pre-rendered
+      // MP3 fallback. Shift NOT pressed (Cmd+Shift+G is a browser
+      // accelerator for "Find previous"; we leave that alone).
+      if (cmd && !e.shiftKey && (e.code === "KeyG" || e.key === "g" || e.key === "G")) {
+        if (onForceGoldenFallback) {
+          e.preventDefault();
+          onForceGoldenFallback();
+        }
+        return;
+      }
 
       if (e.code === "Space") {
         // Ignore the browser's auto-repeat keydowns while held.
@@ -101,5 +135,14 @@ export function useKeyboardShortcuts({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [enabled, spaceMode, onStartRecord, onStopRecord, onAdvance, onReset]);
+  }, [
+    enabled,
+    spaceMode,
+    onStartRecord,
+    onStopRecord,
+    onAdvance,
+    onReset,
+    onKillswitch,
+    onForceGoldenFallback,
+  ]);
 }

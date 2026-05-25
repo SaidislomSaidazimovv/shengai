@@ -308,9 +308,10 @@ export function SyntheticAvatar({ speaking = true, className }: Props) {
       }
       ctx.stroke();
 
-      // Dot pass — v02 §6.7 1.5 px dots in fg-primary at 80 %. The
-      // mouth-inner ring renders slightly darker so the speech motion
-      // reads at a glance.
+      // Dot pass — v02 §5.6 "2 px circles ... on a 12 px grid".
+      // Mouth-inner ring renders slightly darker so the speech motion
+      // reads at a glance. Outline dots are bumped 0.2 px so the jaw
+      // contour reads cleanly against the lighter feature regions.
       for (const p of pts) {
         const px = p.x * w;
         const py = transformY(p, mouthOpen) * h;
@@ -319,9 +320,9 @@ export function SyntheticAvatar({ speaking = true, className }: Props) {
             ? "rgba(10, 10, 10, 0.92)"
             : p.region === "pupil"
               ? "rgba(10, 10, 10, 0.9)"
-              : "rgba(10, 10, 10, 0.72)";
+              : "rgba(10, 10, 10, 0.78)";
         ctx.beginPath();
-        ctx.arc(px, py, p.region === "outline" ? 1.6 : 1.4, 0, Math.PI * 2);
+        ctx.arc(px, py, p.region === "outline" ? 2.2 : 2.0, 0, Math.PI * 2);
         ctx.fill();
       }
 
