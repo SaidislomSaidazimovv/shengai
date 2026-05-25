@@ -19,3 +19,15 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>
 );
+
+// v02 §10 — register the offline-mode service worker once the
+// initial render is dispatched. The SW caches the app shell + demo
+// fallback assets so the loop survives a Wi-Fi drop on stage.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* registration failures are non-fatal — the app still runs
+         online; we only lose the offline-mode safety net. */
+    });
+  });
+}

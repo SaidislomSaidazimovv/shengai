@@ -190,6 +190,31 @@ export default function App() {
         reason = `browser · ${browserAsr.error ?? "no-speech"}`;
       }
 
+      // v02 §10 fallback — both ASR paths returned empty. Load the
+      // pre-computed analysis JSON for this sentence + L1 so the
+      // demo still produces a coherent diagnosis card instead of
+      // routing to NO_SPEECH. Only fires when there really is no
+      // transcript (the API errored or the mic heard silence).
+      if (!transcript) {
+        try {
+          const url = `/demo/analysis/${session.sentenceId}_${session.l1}.json`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const fallback = (await res.json()) as {
+              mockTranscript?: string;
+              triggerPhoneme?: string;
+            };
+            if (fallback.mockTranscript) {
+              transcript = fallback.mockTranscript;
+              provider = "none";
+              reason = `${reason ?? "asr · empty"} · fallback-json`;
+            }
+          }
+        } catch {
+          // JSON fetch failed — fall through to the existing no-speech path.
+        }
+      }
+
       session.setLastTranscript(transcript);
       session.setAsrProvider(provider);
       session.setAsrReason(reason);
@@ -469,8 +494,16 @@ function ErrorView({ message, onReset }: { message: string; onReset: () => void 
 function Footer() {
   return (
     <footer className="border-t border-line/60">
-      <div className="container flex items-center justify-between h-10 font-data text-[10px] uppercase tracking-[0.22em] text-fg/30">
+      <div className="container flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-6 py-3 font-data text-micro uppercase tracking-[0.22em] text-fg/30">
         <span>Mirror · v01 · Hackathon 2026</span>
+        {/* Mirror DevHandover v02 §16 — the sentence to remember. The
+            product's whole identity is this line; we surface it in the
+            footer at micro size so it lives in the build without
+            crowding the hero stages. */}
+        <span className="md:text-center italic normal-case tracking-tight text-fg/40">
+          The first voice system where you compete against your own
+          fluent self.
+        </span>
         <span>Tashkent → World</span>
       </div>
     </footer>

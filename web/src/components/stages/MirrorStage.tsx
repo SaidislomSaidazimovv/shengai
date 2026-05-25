@@ -247,7 +247,7 @@ export function MirrorStage({ onDone, onSkip }: Props) {
                   "ring-2 ring-gold shadow-[0_0_32px_rgba(200,147,46,0.4)]"
               )}
             >
-              <SyntheticAvatar speaking />
+              <SyntheticAvatar speaking sentenceId={sentence?.id} />
             </div>
             <div className="font-data text-micro uppercase tracking-[0.22em] text-fg/60">
               Your Avatar

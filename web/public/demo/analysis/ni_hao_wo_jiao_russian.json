@@ -1,0 +1,29 @@
+{
+  "sentenceId": "ni_hao_wo_jiao",
+  "l1": "russian",
+  "hanzi": "你好，我叫李明",
+  "pinyin": "nǐ hǎo, wǒ jiào lǐ míng",
+  "expectedTranscript": "你好我叫李明",
+  "mockTranscript": "尼好我叫李明",
+  "mismatchCharIdx": 0,
+  "triggerPhoneme": "i",
+  "triggerPhonemeIdx": 1,
+  "charCoveragePct": 83,
+  "phonemeHits": [
+    { "phoneme": "n",  "errorScore": 0.10 },
+    { "phoneme": "i",  "errorScore": 0.81 },
+    { "phoneme": "x",  "errorScore": 0.09 },
+    { "phoneme": "au", "errorScore": 0.07 },
+    { "phoneme": "w",  "errorScore": 0.05 },
+    { "phoneme": "ɔ",  "errorScore": 0.06 },
+    { "phoneme": "tɕ", "errorScore": 0.13 },
+    { "phoneme": "i",  "errorScore": 0.08 },
+    { "phoneme": "au", "errorScore": 0.07 },
+    { "phoneme": "l",  "errorScore": 0.05 },
+    { "phoneme": "i",  "errorScore": 0.06 },
+    { "phoneme": "m",  "errorScore": 0.05 },
+    { "phoneme": "i",  "errorScore": 0.07 },
+    { "phoneme": "ŋ",  "errorScore": 0.10 }
+  ],
+  "note": "Fallback analysis. Russian L1 mistime tone 3 sandhi on 你好 — flattened consecutive tone 3 (T3+T3 instead of T2+T3)."
+}

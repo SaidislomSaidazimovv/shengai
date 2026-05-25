@@ -161,6 +161,23 @@
   100% { width: 100%; }
 }
 
+/* v02 §5.3 — PP Neue Montreal is Pangram-Pangram commercial; we can't
+   redistribute the WOFF2 in the public repo. The @font-face below
+   points at /fonts/PP-Neue-Montreal-Variable.woff2, which is NOT
+   committed. When a licensed copy is dropped into web/public/fonts/
+   the browser starts using it automatically and Switzer (the spec's
+   explicit fallback per §5.3) steps aside. Until then, the @font-face
+   silently fails and Switzer wins by virtue of being next in the
+   font-family stack — which is the correct fallback chain. */
+@font-face {
+  font-family: "PP Neue Montreal";
+  src:
+    url("/fonts/PP-Neue-Montreal-Variable.woff2") format("woff2-variations"),
+    url("/fonts/PP-Neue-Montreal.woff2") format("woff2");
+  font-weight: 400 800;
+  font-display: swap;
+}
+
 /* v02 §6.5 — the L1-PATTERN-DETECTED red dot pulse. The only thing
    moving once the diagnosis card has landed. */
 @keyframes diagnosisPulse {

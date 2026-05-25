@@ -1,0 +1,31 @@
+{
+  "sentenceId": "zhe_shi_yi_ge_yusan",
+  "l1": "uzbek",
+  "hanzi": "这是一个绿色的雨伞",
+  "pinyin": "zhè shì yí gè lǜsè de yǔsǎn",
+  "expectedTranscript": "这是一个绿色的雨伞",
+  "mockTranscript": "贼是一个绿色的雨伞",
+  "mismatchCharIdx": 0,
+  "triggerPhoneme": "ʈʂ",
+  "triggerPhonemeIdx": 0,
+  "charCoveragePct": 89,
+  "phonemeHits": [
+    { "phoneme": "ʈʂ", "errorScore": 0.83 },
+    { "phoneme": "ɤ",  "errorScore": 0.09 },
+    { "phoneme": "ʂ",  "errorScore": 0.12 },
+    { "phoneme": "ɻ",  "errorScore": 0.10 },
+    { "phoneme": "i",  "errorScore": 0.06 },
+    { "phoneme": "k",  "errorScore": 0.05 },
+    { "phoneme": "ɤ",  "errorScore": 0.09 },
+    { "phoneme": "l",  "errorScore": 0.05 },
+    { "phoneme": "y",  "errorScore": 0.16 },
+    { "phoneme": "s",  "errorScore": 0.08 },
+    { "phoneme": "ɤ",  "errorScore": 0.09 },
+    { "phoneme": "t",  "errorScore": 0.05 },
+    { "phoneme": "ɤ",  "errorScore": 0.07 },
+    { "phoneme": "y",  "errorScore": 0.13 },
+    { "phoneme": "s",  "errorScore": 0.06 },
+    { "phoneme": "an", "errorScore": 0.08 }
+  ],
+  "note": "Fallback analysis. Uzbek L1 lacks retroflex contrast — 这 's /ʈʂ/ flattens to /ʂ/."
+}

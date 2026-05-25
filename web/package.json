@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "sync-demo-voice": "node tools/sync-demo-voice.mjs",
-    "prerender-demo-audio": "node tools/prerender-demo-audio.mjs"
+    "prerender-demo-audio": "node tools/prerender-demo-audio.mjs",
+    "generate-avatar-frames": "node tools/generate-avatar-frames.mjs"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
