@@ -69,8 +69,15 @@ export const DEMO_SENTENCES: DemoSentence[] = [
     diagnoses: {
       russian: {
         headline: "RUSSIAN L1 DETECTED",
-        subhead: "Palatalization on /zh/",
-        detail: "Your /ш/ is leaking through. Russian palatalizes where Mandarin retroflexes.",
+        // IPA throughout the diagnosis. The user flagged that the
+        // earlier mix of pinyin (/zh/), Cyrillic (/ш/) and IPA (/ʈʂ/)
+        // looked like four different sounds inside one card. Now the
+        // subhead, the detail and the phoneme-shift box all reference
+        // the same /ʈʂ/ → /ʐʲ/ pair, with the triggerPhoneme matching.
+        subhead: "Retroflex /ʈʂ/ palatalised",
+        detail:
+          "Russian palatalises retroflexes — /ʐʲ/ replaces Mandarin /ʈʂ/. " +
+          "Curl the tongue tip back without fronting it.",
         citation: "Chen et al. · Interspeech 2013",
         triggerPhoneme: "ʈʂ",
         phonemeShift: { expected: "ʈʂ", detected: "ʐʲ" },
@@ -79,8 +86,10 @@ export const DEMO_SENTENCES: DemoSentence[] = [
       },
       uzbek: {
         headline: "UZBEK L1 DETECTED",
-        subhead: "Vowel /ü/ rounding incomplete",
-        detail: "Uzbek vowel inventory lacks the front-rounded /y/ contrast. Round your lips harder.",
+        subhead: "Front-rounded /y/ not produced",
+        detail:
+          "Uzbek vowels lack /y/ (front + rounded). Hold the tongue " +
+          "forward as for /i/, then round the lips into a tight /u/.",
         citation: "Chinese–Uzbek contrastive · IJEAT 2019",
         triggerPhoneme: "y",
         phonemeShift: { expected: "y", detected: "u" },
@@ -101,22 +110,33 @@ export const DEMO_SENTENCES: DemoSentence[] = [
     syllables: ["nǐ", "hǎo", "wǒ", "jiào", "lǐ", "míng"],
     diagnoses: {
       russian: {
+        // Earlier we framed this as a tone-sandhi issue, but tone
+        // notation in the shift box (T3+T3 → T2+T3) clashed visually
+        // with the IPA-based subhead and detail. For the production
+        // card we switch to the segmental /tɕ/ palatalisation, which
+        // Russians produce reliably on alveolo-palatal Mandarin
+        // consonants and which keeps all four card surfaces using
+        // the same IPA notation.
         headline: "RUSSIAN L1 DETECTED",
-        subhead: "Tone 3 → Tone 2 sandhi missed",
-        detail: "Russian intonation flattens consecutive tone 3s. The first nǐ must rise like tone 2.",
+        subhead: "Alveolo-palatal /tɕ/ over-palatalised",
+        detail:
+          "Russian /tɕʲ/ fronts the tongue too much. Mandarin /tɕ/ needs " +
+          "a broader blade-against-palate contact, with the tongue tip down.",
         citation: "Soloveva · Phonetica 2020",
-        triggerPhoneme: "i",
-        phonemeShift: { expected: "T3+T3 → T2+T3", detected: "T3+T3" },
+        triggerPhoneme: "tɕ",
+        phonemeShift: { expected: "tɕ", detected: "tɕʲ" },
         patternNumber: 2,
         patternTotal: 11,
       },
       uzbek: {
         headline: "UZBEK L1 DETECTED",
-        subhead: "Aspiration on /j/ underweighted",
-        detail: "Uzbek /j/ in jiào needs harder aspiration. Push more air through the alveolo-palatal.",
+        subhead: "Alveolo-palatal /tɕ/ flattened to /tʃ/",
+        detail:
+          "Uzbek /tʃ/ is a plain affricate. Mandarin /tɕ/ uses the tongue " +
+          "blade against the soft palate with a subtle aspirated puff.",
         citation: "Karimov · TKLT 2018",
         triggerPhoneme: "tɕ",
-        phonemeShift: { expected: "tɕʰ", detected: "tɕ" },
+        phonemeShift: { expected: "tɕ", detected: "tʃ" },
         patternNumber: 3,
         patternTotal: 9,
       },
@@ -134,20 +154,33 @@ export const DEMO_SENTENCES: DemoSentence[] = [
     diagnoses: {
       russian: {
         headline: "RUSSIAN L1 DETECTED",
-        subhead: "/ü/ collapsed to /u/",
-        detail: "Russian /у/ pulls lǜ toward /lu/. Front the tongue, keep lips rounded — two motions.",
+        // Scripted shift used to claim /y/ → /i/, but the L1
+        // substitution map (and the literature) actually pairs /y/
+        // with /u/ for Russian speakers. We now agree with the L1
+        // map so the dynamic and the fallback paths produce the
+        // same answer.
+        subhead: "Front-rounded /y/ collapsed to /u/",
+        detail:
+          "Russian /u/ is back-rounded. Mandarin /y/ asks for the tongue " +
+          "forward (as in /i/) AND the lips rounded — two motions at once.",
         citation: "Zhang · L2 Speech 2020",
         triggerPhoneme: "y",
-        phonemeShift: { expected: "y", detected: "i" },
+        phonemeShift: { expected: "y", detected: "u" },
         patternNumber: 8,
         patternTotal: 11,
       },
       uzbek: {
+        // Earlier the trigger phoneme (/ʂ/) and the shift box's
+        // expected (/ʈʂ/) referenced two different sounds. Aligning
+        // both to /ʈʂ/ — the retroflex that Uzbek speakers flatten
+        // to /ʂ/ on 这 — keeps the card internally honest.
         headline: "UZBEK L1 DETECTED",
-        subhead: "Retroflex /sh/ devoiced too early",
-        detail: "Uzbek /sh/ is flatter. Curl the tongue, hold voicing through the consonant.",
+        subhead: "Retroflex /ʈʂ/ flattened to /ʂ/",
+        detail:
+          "Uzbek /ʃ/ doesn't curl back. Mandarin /ʈʂ/ needs the tongue tip " +
+          "raised toward the palate, with voicing held through the affricate.",
         citation: "Akhmedova · IJAS 2021",
-        triggerPhoneme: "ʂ",
+        triggerPhoneme: "ʈʂ",
         phonemeShift: { expected: "ʈʂ", detected: "ʂ" },
         patternNumber: 6,
         patternTotal: 9,

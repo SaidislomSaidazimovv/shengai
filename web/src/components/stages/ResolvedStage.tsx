@@ -45,20 +45,24 @@ export function ResolvedStage({ onAgain, onNext }: Props) {
 
   const recordingDurationSec = useSession((s) => s.recordingDurationSec);
   const lastTranscript = useSession((s) => s.lastTranscript);
+  const asrConfidence = useSession((s) => s.asrConfidence);
   const charCoveragePct = useSession((s) => s.charCoveragePct);
   const goldenListenedPct = useSession((s) => s.goldenListenedPct);
   const peakMirrorAlignmentPct = useSession((s) => s.peakMirrorAlignmentPct);
 
-  // SPEAK is honest about what the mic actually delivered:
-  //   - no recording  → null (step never ran, excluded from average)
-  //   - recording but no transcript (silence / unintelligible) → 0
-  //   - usable transcript → 100
+  // SPEAK now reflects how confidently the mic captured speech:
+  //   - no recording                       → null (step skipped, excluded)
+  //   - recording but no transcript        → 0   (silence / unintelligible)
+  //   - recording + transcript             → ASR confidence × 100
+  // The Mandarin SR engine's language model means a binary "captured"
+  // boolean always reads 100% and looks fake. Using confidence here
+  // gives a smooth 30-95% range that tracks how clearly the user spoke.
   const speakPct: number | null =
     recordingDurationSec === null
       ? null
-      : lastTranscript.length > 0
-        ? 100
-        : 0;
+      : lastTranscript.length === 0
+        ? 0
+        : Math.max(0, Math.min(100, Math.round(asrConfidence * 100)));
 
   // The other three only get a value if their step actually executed,
   // so a skipped step doesn't drag the overall down — it's excluded.

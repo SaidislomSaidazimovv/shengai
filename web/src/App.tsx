@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { getDemoSentence } from "@/lib/demoData";
 import { DEMO_USER } from "@/data/demoUser";
 import { sleep } from "@/lib/utils";
+import { getInstantTutor } from "@/lib/tutorFallback";
 import {
   charCoveragePct,
   findFirstMismatch,
@@ -67,6 +68,14 @@ export default function App() {
   const refRec = useRecorder(REF_MAX_SECONDS);
 
   const onStartRecording = useCallback(async () => {
+    // Defense-in-depth: IdleStage disables the mic when no clone exists
+    // and routes the click here only after a clone is set, but a stale
+    // keyboard shortcut (Space) could still fire on first paint. Bounce
+    // to reference instead of recording into the void.
+    if (!session.clone) {
+      setMode("reference");
+      return;
+    }
     const ok = await mainRec.start();
     if (!ok) return;
     // Kick off parallel ASR. If unsupported, the session resolves with
@@ -88,7 +97,11 @@ export default function App() {
     async (phoneme: string, transcript: string, language: TutorLanguage) => {
       const sentence = getDemoSentence(session.sentenceId);
       if (!sentence) return;
-      session.setTutor(null);
+      // Paint canned content immediately so the AITutorPanel never
+      // shows a 5-15s spinner. Our local library is phoneme × L1 ×
+      // language indexed, so the initial paint is already specific
+      // and useful — never a generic template.
+      session.setTutor(getInstantTutor(phoneme, language, session.l1));
       session.setTutorLoading(true);
       try {
         const res = await api.explain({
@@ -99,29 +112,28 @@ export default function App() {
           phoneme,
           language,
         });
-        session.setTutor({
-          explanation: res.explanation,
-          tip: res.tip,
-          source: res.source,
-          language,
-        });
+        // Critical: only replace the painted canned content when
+        // Gemini ACTUALLY produced the response. If the server fell
+        // back to its own canned (timeout, bad_json, quota), that
+        // canned is generic and strictly worse than the library
+        // entry we already painted — overwriting it would downgrade
+        // the user's view from "tongue tip curled toward the palate"
+        // back to "L1 has no direct match for /X/". Keep what we
+        // have; just flip the loading flag off.
+        if (res.source === "gemini") {
+          session.setTutor({
+            explanation: res.explanation,
+            tip: res.tip,
+            source: "gemini",
+            language,
+          });
+        } else {
+          session.setTutorLoading(false);
+        }
       } catch {
-        session.setTutor({
-          explanation:
-            language === "uz"
-              ? "Tushuntirish hozir olinmadi. Iltimos, qayta urinib ko'ring."
-              : language === "ru"
-                ? "Объяснение сейчас недоступно. Повторите попытку."
-                : "Explanation unavailable right now. Try again.",
-          tip:
-            language === "uz"
-              ? "Lablar va til holatini diqqat bilan kuzating."
-              : language === "ru"
-                ? "Следите за положением губ и языка."
-                : "Watch lip and tongue position closely.",
-          source: "fallback",
-          language,
-        });
+        // Network failure or AbortController timeout. Keep the
+        // library entry, just turn off the loading indicator.
+        session.setTutorLoading(false);
       }
     },
     // session methods are stable
@@ -218,9 +230,29 @@ export default function App() {
       session.setLastTranscript(transcript);
       session.setAsrProvider(provider);
       session.setAsrReason(reason);
+      // Browser SR returns a real confidence 0..1. Whisper / fallback
+      // paths return no signal, so we default to a neutral 0.7 there.
+      // The SPEAK row of the RESOLVED report keys off this number so
+      // a high-confidence capture reads as ~90%, a hesitant one ~50%,
+      // silence as 0%.
+      session.setAsrConfidence(
+        provider === "browser" && browserAsr.confidence > 0
+          ? browserAsr.confidence
+          : provider === "huggingface"
+            ? 0.7
+            : 0
+      );
       // RESOLVED report needs the SPEAK coverage % — what fraction of the
       // target hanzi the user actually produced. 0 on no-speech.
-      session.setCharCoveragePct(charCoveragePct(sentence.hanzi, transcript));
+      // Pass the browser ASR's confidence (when available) so that a
+      // low-confidence "perfect" transcript doesn't read as 100%. The
+      // Mandarin SR engine has a strong language model that returns
+      // the most likely sentence even from mumbled audio; the
+      // confidence score is the most honest signal we have that
+      // counter-balances it.
+      session.setCharCoveragePct(
+        charCoveragePct(sentence.hanzi, transcript, browserAsr.confidence)
+      );
 
       const mismatchCharIdx = findFirstMismatch(sentence.hanzi, transcript);
       const noSpeech = transcript.length === 0;
@@ -246,6 +278,14 @@ export default function App() {
       }));
       session.setMddResult(hits, triggerPhoneme, triggerIdx);
 
+      // Fire the Gemini tutor request BEFORE the 1.8s analyzing pause
+      // so it runs in parallel with the visual pacing. By the time
+      // DiagnosisStage renders, the AITutorPanel often already has its
+      // explanation ready instead of showing a spinner.
+      if (!noSpeech) {
+        void requestTutorExplanation(triggerPhoneme, transcript, session.tutorLanguage);
+      }
+
       // Pace the analyzing animation regardless of how fast ASR resolved.
       await sleep(1800);
       session.bumpAttempts();
@@ -258,11 +298,6 @@ export default function App() {
       // because judges expect the wow moment — see DEV_HANDOVER §5.
       void perfect;
       session.goto("diagnosis");
-
-      // Fire Gemini tutor call in the background — the DiagnosisCard
-      // animates in immediately; the AITutorPanel shows a loader until
-      // this resolves. We never await here so the UX isn't blocked.
-      void requestTutorExplanation(triggerPhoneme, transcript, session.tutorLanguage);
     },
     // requestTutorExplanation is stable across renders (its deps are sentenceId+l1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,19 +313,23 @@ export default function App() {
     const sentence = getDemoSentence(session.sentenceId);
     if (!sentence) return;
 
-    // Prefer the live session clone (a fresh ReferenceStage capture in this
-    // tab), otherwise fall back to the hardcoded demo voice (Mirror
-    // DevHandover v02 §3 — pre-cloned on-stage user voice). Final fallback
-    // is the pre-rendered MP3 if neither voice is available.
+    // session.clone is guaranteed to be set by the time we reach this
+    // stage: IdleStage refuses to start recording without it, and the
+    // ReferenceStage either captures a fresh live clone or assigns the
+    // bundled demo voice via Skip-with-demo. The ?? on the next line
+    // is therefore defense-in-depth only.
     const voiceId = session.clone?.voiceId ?? DEMO_USER.voiceId;
-    if (voiceId) {
+    if (voiceId && voiceId !== "demo-fallback") {
       try {
         const res = await api.synthesize(voiceId, sentence.pinyin);
         const audio = base64ToBlobUrl(res.audioBase64, "audio/mpeg");
         session.setGolden({ url: audio, source: res.source });
         return;
       } catch {
-        // fall through to pre-render
+        // fall through to pre-render. GoldenStage surfaces a banner
+        // when the user was expecting their live clone but ended up on
+        // the prerendered fallback (the Reference Trap warning we
+        // never want to be silent about).
       }
     }
     session.setGolden({
@@ -316,6 +355,20 @@ export default function App() {
   const onStartReference = useCallback(() => setMode("reference"), []);
   const onExitReference = useCallback(() => setMode("main"), []);
 
+  // "Use demo voice (faster)" escape hatch — wires the bundled preset
+  // voice into the session so the user can keep going without the 10s
+  // capture step. Golden Voice will speak in DEMO_USER's timbre, and
+  // the IdleStage ReferenceCard makes that explicit so the user isn't
+  // misled into thinking the playback is their own.
+  const onSkipWithDemoVoice = useCallback(() => {
+    if (DEMO_USER.voiceId) {
+      session.setClone({ voiceId: DEMO_USER.voiceId, source: "fallback" });
+    } else {
+      session.setClone({ voiceId: "demo-fallback", source: "fallback" });
+    }
+    setMode("main");
+  }, [session]);
+
   const onBeginReferenceCapture = useCallback(async () => {
     const ok = await refRec.start();
     if (!ok) {
@@ -329,14 +382,55 @@ export default function App() {
     if (!result) return;
     session.setReference({ blob: result.blob, url: result.url, durationSec: result.duration });
 
+    // If the user is re-capturing (an old live clone already exists),
+    // release that slot before we burn a new one — Starter plan caps
+    // the workspace at 10 IVC voices. Best-effort; failures are silent.
+    const previousClone = session.clone;
+    if (previousClone && previousClone.source === "live" && previousClone.voiceId !== "demo-fallback") {
+      void api.deleteVoice(previousClone.voiceId);
+    }
+
+    // Stay on the ReferenceStage with a visible progress indicator
+    // while ElevenLabs IVC runs (8-20s). Without this the screen
+    // freezes silently and users assume the app hung.
+    session.setCloning(true);
     try {
       const cloneRes = await api.cloneVoice(result.blob, `mirror-${session.l1}`);
       session.setClone({ voiceId: cloneRes.voiceId, source: cloneRes.source === "elevenlabs" ? "live" : "fallback" });
     } catch {
       session.setClone({ voiceId: "demo-fallback", source: "fallback" });
+    } finally {
+      session.setCloning(false);
     }
     setMode("main");
   }, [refRec, session]);
+
+  /* ----- Voice-slot cleanup on tab close (ElevenLabs Starter cap) -----
+   *
+   * sendBeacon survives the unload event; a regular fetch in beforeunload
+   * is typically cancelled by the browser. We only fire it for live
+   * clones — preset and demo-fallback IDs are protected server-side. */
+  useEffect(() => {
+    const handler = () => {
+      const c = session.clone;
+      if (!c || c.source !== "live" || c.voiceId === "demo-fallback") return;
+      if (DEMO_USER.voiceId && c.voiceId === DEMO_USER.voiceId) return;
+      try {
+        const blob = new Blob([JSON.stringify({ voiceId: c.voiceId })], {
+          type: "application/json",
+        });
+        navigator.sendBeacon("/api/clone_delete", blob);
+      } catch {
+        /* best-effort cleanup; ignore */
+      }
+    };
+    window.addEventListener("pagehide", handler);
+    window.addEventListener("beforeunload", handler);
+    return () => {
+      window.removeEventListener("pagehide", handler);
+      window.removeEventListener("beforeunload", handler);
+    };
+  }, [session.clone]);
 
   /* ----------- Keyboard shortcuts (v02 §4 / §6.2 / §6.3) ----------- */
   // Map the current stage to the right action set so Space / Enter / Esc
@@ -358,6 +452,14 @@ export default function App() {
   // Cmd/Ctrl+Shift+D — killswitch: wipe session state, drop straight
   // back to IDLE, force the demo into pre-rendered fallback mode.
   const onKillswitch = useCallback(() => {
+    // Release the live clone slot if one exists — best-effort, since
+    // the demo will resume on the prerendered path either way.
+    const prev = session.clone;
+    if (prev && prev.source === "live" && prev.voiceId !== "demo-fallback") {
+      if (!DEMO_USER.voiceId || prev.voiceId !== DEMO_USER.voiceId) {
+        void api.deleteVoice(prev.voiceId);
+      }
+    }
     session.reset();
     setMode("main");
     // Tag the session so subsequent Golden Voice stages skip live
@@ -423,6 +525,8 @@ export default function App() {
               onStart={onBeginReferenceCapture}
               onStop={onStopReferenceCapture}
               onBack={onExitReference}
+              onSkipWithDemoVoice={onSkipWithDemoVoice}
+              hasExistingClone={!!session.clone}
             />
           </StageView>
         ) : session.stage === "idle" ? (
@@ -495,10 +599,9 @@ function Footer() {
   return (
     <footer className="border-t border-line/60">
       <div className="container flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-6 py-3 font-data text-micro uppercase tracking-[0.22em] text-fg/30">
-        <span>Mirror · v01 · Hackathon 2026</span>
-        {/* Mirror DevHandover v02 §16 — the sentence to remember. The
-            product's whole identity is this line; we surface it in the
-            footer at micro size so it lives in the build without
+        <span>Mirror · v1</span>
+        {/* The product's whole identity is this line; we surface it in
+            the footer at micro size so it lives in the build without
             crowding the hero stages. */}
         <span className="md:text-center italic normal-case tracking-tight text-fg/40">
           The first voice system where you compete against your own

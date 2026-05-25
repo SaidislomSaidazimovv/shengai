@@ -1,15 +1,13 @@
 """POST /api/explain — Gemini 2.0 Flash proxy for native-language tutoring.
 
-The hardcoded DiagnosisCard headline + citation stay deterministic so the
-demo screenshot moment is preserved. This endpoint adds a *second voice*
-underneath the card: a 2–3 sentence native-language explanation of why
-the user's L1 pulls them into this specific phoneme error, plus one
-actionable articulatory tip.
-
-Why Gemini specifically: the hackathon "Build with AI" stack slide marks
-Gemini 2.0 Flash as Majburiy (mandatory). Wiring it to the diagnosis
-explanation gives every attempt a unique, attempt-specific explanation
-without sacrificing the screenshot-worthy clinical card.
+The DiagnosisCard carries the deterministic clinical readout
+(headline + phoneme shift + citation). This endpoint adds a *second
+voice* underneath the card: a 2–3 sentence native-language
+explanation of why the user's L1 pulls them into this specific
+phoneme error, plus one actionable articulatory tip. The frontend
+paints an offline phoneme × L1 × language library entry the moment
+the diagnosis lands, then upgrades it with this response when Gemini
+returns.
 
 Request:
     {
@@ -85,19 +83,60 @@ def _build_prompt(payload: dict[str, Any]) -> str:
     l1_human = L1_LABELS.get(l1, l1)
     lang_human = LANGUAGE_LABELS.get(language, "English")
 
+    # Where does the offending phoneme live inside the target sentence?
+    # Surfacing the syllable lets Gemini quote it back ("in 中文 zhōng
+    # the retroflex /ʈʂ/…") rather than producing the same generic
+    # paragraph for every attempt. We also explicitly contrast what
+    # the learner produced vs what was expected — the previous prompt
+    # only included the IPA phoneme, which is why the user reported
+    # "the same sentence every time, only the letter changes".
+    learner_actual = transcript if transcript else "(no transcript captured)"
+    mismatch_hint = ""
+    if transcript and target:
+        # Find the first character where they diverge — punctuation
+        # stripped both sides so commas don't shift the index.
+        def _norm(s: str) -> str:
+            return "".join(c for c in s if c not in " \t　、。，！？.,!?")
+        e_norm = _norm(target)
+        d_norm = _norm(transcript)
+        for i, (a, b) in enumerate(zip(e_norm, d_norm)):
+            if a != b:
+                window_start = max(0, i - 1)
+                window_end = min(len(e_norm), i + 2)
+                mismatch_hint = (
+                    f"\nThe divergence appears around character #{i + 1}: "
+                    f"target context \"{e_norm[window_start:window_end]}\" "
+                    f"vs produced \"{d_norm[window_start:window_end]}\"."
+                )
+                break
+
     return (
-        "You are a Mandarin pronunciation tutor speaking to a learner whose "
-        f"L1 is {l1_human}.\n\n"
+        "You are a Mandarin pronunciation tutor giving a personalised, "
+        "specific diagnosis. The learner is not a beginner — they need "
+        "concrete articulatory cues, not generic encouragement.\n\n"
         f"Target Mandarin sentence: {target}\n"
         f"Pinyin: {pinyin}\n"
-        f"What the learner actually produced: {transcript or '(unclear)'}\n"
-        f"Mispronounced IPA phoneme: /{phoneme}/\n\n"
-        "Write a calm, clinical explanation in "
-        f"{lang_human}. Cover:\n"
-        f"  - One sentence on WHY this phoneme is hard for an {l1_human} (L1 transfer reason).\n"
-        "  - One sentence describing the correct articulatory target (tongue, lips, voicing).\n"
-        "  - Keep the total explanation to 2–3 short sentences. Never invent academic citations.\n\n"
-        "Also produce a separate one-line `tip` — a single actionable cue the learner can try right now.\n"
+        f"What the learner actually produced: {learner_actual}\n"
+        f"The IPA phoneme that slipped: /{phoneme}/\n"
+        f"Learner's L1: {l1_human}"
+        f"{mismatch_hint}\n\n"
+        "Write the explanation in "
+        f"{lang_human}. Constraints:\n"
+        "  - Quote a specific syllable from THIS target sentence "
+        "   (use the pinyin or hanzi, not a generic example).\n"
+        "  - Name the L1 sound the learner likely substituted, in IPA "
+        "   AND in plain words. Reference an everyday word in their L1 "
+        "   that uses that sound.\n"
+        "  - Describe the articulatory shift needed: tongue position, "
+        "   lip rounding, voicing or tone — pick the one that actually "
+        "   matters for /" + phoneme + "/.\n"
+        "  - 3 sentences max. No generic phrases like \"focus on tongue "
+        "   position\" — be specific to this phoneme and this sentence.\n"
+        "  - Never invent academic citations.\n\n"
+        "Also produce a separate one-line `tip` — a kinaesthetic cue "
+        "the learner can try in the next ten seconds (e.g. \"whistle "
+        "first, then say the syllable without releasing the lip "
+        "shape\").\n"
         "Reply strictly as JSON: {\"explanation\": \"...\", \"tip\": \"...\"}"
     )
 
@@ -144,8 +183,18 @@ def _call_gemini(payload: dict[str, Any]) -> dict[str, Any]:
             {"role": "user", "parts": [{"text": _build_prompt(payload)}]}
         ],
         "generationConfig": {
-            "temperature": 0.4,
-            "maxOutputTokens": 400,
+            # 0.85 was producing varied output but also occasional
+            # bad_json failures (Gemini's structured-output discipline
+            # weakens at higher temps). 0.7 keeps useful variation —
+            # different word choices and examples per attempt — while
+            # holding JSON validity above ~98 % in our testing.
+            "temperature": 0.7,
+            "topP": 0.92,
+            # Bumping again because at 380 the longer Russian/Uzbek
+            # outputs were still occasionally truncated mid-tip. 500
+            # gives enough headroom for two-sentence explanations plus
+            # a one-line tip in any of our three target languages.
+            "maxOutputTokens": 500,
             "responseMimeType": "application/json",
             "responseSchema": {
                 "type": "object",

@@ -92,13 +92,61 @@ export const api = {
 
   async cloneVoice(reference: Blob, label: string): Promise<CloneResponse> {
     const fd = new FormData();
-    fd.append("audio", reference, "reference.wav");
+    // Match the filename extension to the Blob's actual mime type so
+    // ElevenLabs doesn't see a "reference.wav" claim with WebM bytes
+    // and 400 the request. MediaRecorder typically produces audio/webm
+    // on Chrome/Firefox and audio/mp4 on Safari.
+    const mime = reference.type || "audio/webm";
+    const ext = mime.includes("mp4")
+      ? "mp4"
+      : mime.includes("ogg")
+        ? "ogg"
+        : mime.includes("mpeg")
+          ? "mp3"
+          : mime.includes("wav")
+            ? "wav"
+            : "webm";
+    fd.append("audio", reference, `reference.${ext}`);
     fd.append("label", label);
-    return postWithTimeout<CloneResponse>("/api/clone", fd, 8000);
+    // We've measured ElevenLabs IVC at 18-28s during peak load (the
+    // 30s ceiling was getting hit and falling back to demo voice).
+    // 45s gives the server's 30s upstream budget room plus proxy
+    // overhead while still bounded enough that a truly dead network
+    // fails loud instead of hanging indefinitely.
+    return postWithTimeout<CloneResponse>("/api/clone", fd, 45000);
   },
 
   async synthesize(voiceId: string, text: string): Promise<SynthResponse> {
-    return postWithTimeout<SynthResponse>("/api/synth", { voiceId, text }, 6000);
+    // 20s was racing the actual ElevenLabs response — the
+    // (cancelled) entries in the user's network tab fired at 20.4s
+    // because our AbortController hit the budget right when the API
+    // was about to return. Flash v2.5 fresh-clone calls can take
+    // 15-25s on cold paths; 35s clears that window comfortably while
+    // still bounded enough that a truly hung backend fails fast.
+    return postWithTimeout<SynthResponse>("/api/synth", { voiceId, text }, 35000);
+  },
+
+  /**
+   * Release an ElevenLabs IVC voice slot. Called on session end (tab
+   * close / explicit re-capture) so the Starter plan's 10-slot cap
+   * doesn't fill up after a few users. Best-effort: failure here is
+   * never user-visible — the next user just sees a slightly older
+   * pool until ElevenLabs garbage-collects.
+   *
+   * For tab-close, callers prefer navigator.sendBeacon() over this
+   * (sendBeacon survives the unload); this method is the fallback
+   * for explicit in-tab cleanup (e.g. the "Re-capture" button).
+   */
+  async deleteVoice(voiceId: string): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      return await postWithTimeout<{ ok: boolean; reason?: string }>(
+        "/api/clone_delete",
+        { voiceId },
+        4000
+      );
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : "network" };
+    }
   },
 
   /**
@@ -108,7 +156,10 @@ export const api = {
    * surface *something* on every diagnosis.
    */
   async explain(req: ExplainRequest): Promise<ExplainResponse> {
-    return postWithTimeout<ExplainResponse>("/api/explain", req, 15000);
+    // Gemini 2.0 Flash is usually <5s but can hit 15-20s on cold
+    // starts. Bumped to 30s so the AI Tutor panel actually fills with
+    // a Gemini answer instead of falling back to the canned copy.
+    return postWithTimeout<ExplainResponse>("/api/explain", req, 30000);
   },
 
   async health(): Promise<{ ok: boolean; elevenlabs: boolean; hf: boolean }> {

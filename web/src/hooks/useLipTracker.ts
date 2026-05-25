@@ -20,6 +20,19 @@ export interface LipFrame {
   outer: { x: number; y: number }[];
   /** Inner lip outline polygon (normalized coords). */
   inner: { x: number; y: number }[];
+  /** Full 468-point face mesh, normalized to [0,1]. Lets the renderer
+   *  draw a complete face overlay instead of bare lip lines. */
+  all: { x: number; y: number }[];
+  /** Face oval outline (the jaw + forehead boundary). */
+  faceOval: { x: number; y: number }[];
+  /** Left/right eye outlines. */
+  leftEye: { x: number; y: number }[];
+  rightEye: { x: number; y: number }[];
+  /** Left/right brow outlines. */
+  leftBrow: { x: number; y: number }[];
+  rightBrow: { x: number; y: number }[];
+  /** Nose centerline. */
+  nose: { x: number; y: number }[];
   /** Vertical opening of the lips (0..1, normalized to face height). */
   openness: number;
   /** Width of the lips (0..1, normalized to face width). */
@@ -44,7 +57,7 @@ export interface LipTrackerResult {
   detach: () => void;
 }
 
-// MediaPipe face mesh: standard outer + inner lip indices.
+// MediaPipe Face Mesh — standard topology landmark indices.
 // Source: https://developers.google.com/mediapipe/solutions/vision/face_landmarker
 const OUTER_LIP_IDX = [
   61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185,
@@ -52,6 +65,23 @@ const OUTER_LIP_IDX = [
 const INNER_LIP_IDX = [
   78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191,
 ];
+// Face oval — jaw line + forehead boundary, walked clockwise from the
+// top-centre. Closes back to start so the overlay can stroke a clean
+// continuous outline.
+const FACE_OVAL_IDX = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379,
+  378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
+  162, 21, 54, 103, 67, 109,
+];
+const LEFT_EYE_IDX = [
+  33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246,
+];
+const RIGHT_EYE_IDX = [
+  263, 249, 390, 373, 374, 380, 381, 382, 362, 466, 388, 387, 386, 385, 384, 398,
+];
+const LEFT_BROW_IDX = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46];
+const RIGHT_BROW_IDX = [336, 296, 334, 293, 300, 276, 283, 282, 295, 285];
+const NOSE_IDX = [168, 6, 197, 195, 5, 4, 1, 19, 94, 2];
 
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -101,17 +131,41 @@ export function useLipTracker(opts: LipTrackerOptions = {}): LipTrackerResult {
       const faces = result.faceLandmarks;
       if (faces && faces.length > 0) {
         const lm = faces[0];
-        const outer = OUTER_LIP_IDX.map((i) => ({ x: lm[i].x, y: lm[i].y }));
-        const inner = INNER_LIP_IDX.map((i) => ({ x: lm[i].x, y: lm[i].y }));
+        const pick = (idxs: number[]) => idxs.map((i) => ({ x: lm[i].x, y: lm[i].y }));
+        const all = lm.map((p) => ({ x: p.x, y: p.y }));
         // Openness = vertical distance between upper-inner (13) and
         // lower-inner (14). Width = corner-to-corner (61 ↔ 291).
         const openness = Math.abs(lm[13].y - lm[14].y);
         const width = Math.abs(lm[61].x - lm[291].x);
-        setFrame({ outer, inner, openness, width });
+        setFrame({
+          outer: pick(OUTER_LIP_IDX),
+          inner: pick(INNER_LIP_IDX),
+          all,
+          faceOval: pick(FACE_OVAL_IDX),
+          leftEye: pick(LEFT_EYE_IDX),
+          rightEye: pick(RIGHT_EYE_IDX),
+          leftBrow: pick(LEFT_BROW_IDX),
+          rightBrow: pick(RIGHT_BROW_IDX),
+          nose: pick(NOSE_IDX),
+          openness,
+          width,
+        });
 
+        // Score = 0 when the mouth is essentially closed. Without
+        // this gate, a resting face (openness ≈ 0.005) returns a
+        // 10-15 % score that the EMA accumulates into a peak even
+        // when the user never tried — the symptom the user flagged
+        // after watching the report. The cutoff at 0.012 matches a
+        // visibly parted-lip mouth; tighter than that = no credit.
         const drift = Math.abs(openness - targetOpenness);
-        const score = Math.max(0, 100 - (drift / tolerance) * 100);
-        setAlignment((prev) => prev * 0.7 + score * 0.3); // EMA smoothing
+        const rawScore =
+          openness < 0.012
+            ? 0
+            : Math.max(0, 100 - (drift / tolerance) * 100);
+        // Faster EMA (0.55/0.45) so the score drops back to zero
+        // promptly when the user closes their mouth, instead of the
+        // earlier 0.7/0.3 which carried high reads across closures.
+        setAlignment((prev) => prev * 0.55 + rawScore * 0.45);
       }
     } catch (e) {
       // Skip the frame; transient detector errors are not fatal.

@@ -1,11 +1,10 @@
 import { motion } from "motion/react";
-import { Mic, AlertCircle } from "lucide-react";
+import { Mic, AlertCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SentencePrompt } from "@/components/SentencePrompt";
 import { useSession } from "@/store/session";
-import { DEMO_USER } from "@/data/demoUser";
 import { ease } from "@/motion/presets";
 
 interface Props {
@@ -16,14 +15,23 @@ interface Props {
 /**
  * The opening screen — mic button, target sentence, language toggle.
  *
- * If we haven't captured a reference clip yet, we surface a one-line
- * notice that the reference is missing. The reference is the input to
- * ElevenLabs cloning per §3 ("Reference Audio Trap"); without it the
- * golden voice will leak the user's accent.
+ * The mic is GATED on having a voice clone. Without a clone, the
+ * Golden Voice step would either fall back to a stranger's voice
+ * (Reference Audio Trap, §3) or quietly play the preset demo voice
+ * pretending to be the user. Forcing reference capture first keeps
+ * the "your own voice" claim honest. A judge-shortcut "Skip with
+ * demo voice" button lives on the ReferenceStage for time-pressed
+ * walkthroughs.
  */
 export function IdleStage({ onStartRecording, onStartReference }: Props) {
   const reference = useSession((s) => s.reference);
   const clone = useSession((s) => s.clone);
+  const micEnabled = !!clone;
+  const usingDemoVoice = clone?.source === "fallback";
+  // Differentiate explicit Skip (voiceId points at DEMO_USER) from a
+  // failed clone attempt (voiceId === "demo-fallback"). The body copy
+  // and CTA should not lie to a user who actually recorded a reference.
+  const cloneFailed = usingDemoVoice && clone?.voiceId === "demo-fallback";
 
   return (
     <div className="container py-14 grid place-items-center">
@@ -56,25 +64,38 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
                  - icon lucide Mic 36px white
                  - idle breathing scale 1↔1.015 over 3s ease-in-out
                  - hover scale 1.04 + shadow-3 (200ms)
-                 - press scale 0.96 (100ms) */}
+                 - press scale 0.96 (100ms)
+                 Locked state: no breathing, no hover, opacity-40, cursor
+                 not-allowed. Clicking the locked mic routes the user to
+                 ReferenceStage instead of recording — that's the only
+                 path forward when no clone exists. */}
             <motion.button
-              onClick={onStartRecording}
-              className="relative grid place-items-center w-30 h-30 rounded-full bg-fg text-bg shadow-2 transition-shadow duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-4 focus-visible:ring-offset-bg"
+              onClick={micEnabled ? onStartRecording : onStartReference}
+              className={
+                "relative grid place-items-center w-30 h-30 rounded-full bg-fg text-bg shadow-2 transition-shadow duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-4 focus-visible:ring-offset-bg " +
+                (micEnabled ? "" : "opacity-40 cursor-pointer")
+              }
               style={{
                 backgroundImage:
                   "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.08) 0%, transparent 60%)",
               }}
-              animate={{ scale: [1, 1.015, 1] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              whileHover={{
-                scale: 1.04,
-                transition: { duration: 0.2, ease: ease.out },
-              }}
-              whileTap={{
-                scale: 0.96,
-                transition: { duration: 0.1, ease: ease.out },
-              }}
-              aria-label="Start recording"
+              animate={micEnabled ? { scale: [1, 1.015, 1] } : { scale: 1 }}
+              transition={
+                micEnabled
+                  ? { duration: 3, repeat: Infinity, ease: "easeInOut" }
+                  : { duration: 0 }
+              }
+              whileHover={
+                micEnabled
+                  ? { scale: 1.04, transition: { duration: 0.2, ease: ease.out } }
+                  : undefined
+              }
+              whileTap={
+                micEnabled
+                  ? { scale: 0.96, transition: { duration: 0.1, ease: ease.out } }
+                  : undefined
+              }
+              aria-label={micEnabled ? "Start recording" : "Capture reference first"}
             >
               {/* v02 §5.6 — subtle mesh dots inside the mic button. */}
               <span
@@ -86,14 +107,28 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
           </div>
 
           <div className="text-center">
-            <div className="font-data text-[11px] uppercase tracking-[0.22em] text-fg/40">
-              Press <kbd className="px-1.5 py-0.5 border border-line text-fg/60 font-data text-[10px]">SPACE</kbd> to speak · hold to record · auto-stops at 8s
-            </div>
+            {micEnabled ? (
+              <div className="font-data text-[11px] uppercase tracking-[0.22em] text-fg/40">
+                Press <kbd className="px-1.5 py-0.5 border border-line text-fg/60 font-data text-[10px]">SPACE</kbd> to speak · hold to record · auto-stops at 8s
+              </div>
+            ) : (
+              <div className="font-data text-[11px] uppercase tracking-[0.22em] text-signal">
+                Voice clone required — record a 10s reference first.
+              </div>
+            )}
           </div>
 
-          <div className="mt-2 flex items-center gap-4">
-            <LanguageToggle />
-          </div>
+          {micEnabled && (
+            <div className="mt-2 flex items-center gap-4">
+              <LanguageToggle />
+            </div>
+          )}
+
+          {!micEnabled && (
+            <Button variant="signal" size="xl" onClick={onStartReference}>
+              Capture reference <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         <div className="mt-14">
@@ -101,9 +136,9 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ReferenceCard
               ok={!!reference}
-              cloned={!!clone}
-              presetVoiceId={DEMO_USER.voiceId}
-              presetVoiceName={DEMO_USER.voiceName}
+              hasClone={!!clone}
+              usingDemoVoice={usingDemoVoice}
+              cloneFailed={cloneFailed}
               onStart={onStartReference}
             />
             <BeliefCard />
@@ -116,29 +151,42 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
 
 interface ReferenceCardProps {
   ok: boolean;
-  cloned: boolean;
-  presetVoiceId: string | null;
-  presetVoiceName: string | null;
+  hasClone: boolean;
+  usingDemoVoice: boolean;
+  cloneFailed: boolean;
   onStart: () => void;
 }
 
-function ReferenceCard({ ok, cloned, presetVoiceId, presetVoiceName, onStart }: ReferenceCardProps) {
-  // Hardcoded preset voice (Mirror DevHandover v02 §3) takes effect only
-  // when this session has no fresh capture yet — a live ReferenceStage
-  // capture always wins. Surface the preset state so the user knows the
-  // Golden Voice step will work even without re-capturing.
-  const hasPreset = !!presetVoiceId && !ok;
+function ReferenceCard({ ok, hasClone, usingDemoVoice, cloneFailed, onStart }: ReferenceCardProps) {
+  // Four-state badge logic:
+  //   - hasClone && !usingDemoVoice → user's live clone, the honest path
+  //   - cloneFailed                 → reference recorded but /api/clone
+  //     came back as "demo-fallback". We don't pretend the user skipped;
+  //     we explicitly invite them to retry.
+  //   - hasClone &&  usingDemoVoice → judge took the Skip route, demo
+  //     voice is in use (we name it explicitly so the user knows what
+  //     Golden Voice will play)
+  //   - !hasClone                   → mandatory pre-flight state
+  const badgeVariant: "default" | "signal" = hasClone && !cloneFailed ? "default" : "signal";
+  const badgeLabel = !hasClone
+    ? "REQUIRED"
+    : cloneFailed
+      ? "CLONE FAILED"
+      : usingDemoVoice
+        ? "DEMO VOICE ACTIVE"
+        : "YOUR VOICE CLONED";
 
-  // v02 §5.2 color discipline: gold appears only when Golden Voice plays,
-  // never in IDLE state badges. Use default/signal variants here instead.
-  const badgeVariant: "default" | "signal" = ok ? "default" : hasPreset ? "default" : "signal";
-  const badgeLabel = ok
-    ? cloned
-      ? "VOICE CLONED"
-      : "REFERENCE OK"
-    : hasPreset
-      ? "PRESET VOICE READY"
-      : "MISSING";
+  const heading = !hasClone || cloneFailed ? "Capture native timbre first." : "Voice ready.";
+
+  const body = !hasClone
+    ? "Read a short paragraph in your own language so Golden Voice can clone your timbre without leaking your Mandarin accent."
+    : cloneFailed
+      ? "Voice cloning didn't complete — Golden Voice is using the bundled demo clip for now. Try re-capturing; check your mic and network if it fails again."
+      : usingDemoVoice
+        ? "You skipped reference capture — Golden Voice will play the bundled demo voice. Record a fresh reference any time to hear yourself instead."
+        : ok
+          ? "Your voice is cloned. Each Golden Voice playback will speak the sentence in your own timbre."
+          : "Your voice is ready. Each Golden Voice playback will speak the sentence in your own timbre.";
 
   return (
     <div className="clinical-card clinical-card-interactive p-5">
@@ -146,14 +194,10 @@ function ReferenceCard({ ok, cloned, presetVoiceId, presetVoiceName, onStart }: 
         <span className="font-data text-[10px] uppercase tracking-[0.2em] text-fg/40">Step 0 · Reference</span>
         <Badge variant={badgeVariant}>{badgeLabel}</Badge>
       </div>
-      <div className="font-stamp text-2xl leading-tight mb-2">Capture native timbre first.</div>
-      <p className="text-fg/50 text-sm font-data leading-relaxed mb-4">
-        {hasPreset
-          ? `Pre-cloned voice "${presetVoiceName ?? "demo"}" is wired in — Golden Voice plays this until you record a fresh reference.`
-          : "Read a short paragraph in your own language so the golden voice clones your timbre without your Mandarin accent leaking through."}
-      </p>
-      <Button variant="outline" size="sm" onClick={onStart}>
-        {ok ? "Re-capture reference" : hasPreset ? "Re-capture reference" : "Capture reference"}
+      <div className="font-stamp text-2xl leading-tight mb-2">{heading}</div>
+      <p className="text-fg/50 text-sm font-data leading-relaxed mb-4">{body}</p>
+      <Button variant={cloneFailed ? "signal" : "outline"} size="sm" onClick={onStart}>
+        {hasClone ? (cloneFailed ? "Re-capture reference" : "Re-capture reference") : "Capture reference"}
       </Button>
     </div>
   );

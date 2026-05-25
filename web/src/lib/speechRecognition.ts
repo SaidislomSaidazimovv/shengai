@@ -2,20 +2,21 @@
  * Browser-native ASR using the Web Speech API.
  *
  * Why we use this over a HuggingFace wav2vec2 endpoint:
- *   - The phoneme-MDD models named in the original handover
- *     (mrrubino/..., facebook/wav2vec2-xlsr-53-espeak-cv-ft) are NOT
- *     deployed to the HF Inference API, so /api/mdd was always falling
- *     back to a hardcoded trigger phoneme. The "real signal" half of the
- *     advisor's "honest cheat" was missing — meaning the same /y/ fired
- *     even when the user said nothing.
- *   - `SpeechRecognition` is free, zero-token, runs in Chrome/Edge/Safari,
- *     and returns Mandarin characters when zh-CN is selected. From the
- *     actual transcript we can compare against the expected sentence
- *     character-by-character and pin the true first mismatch.
+ *   - The phoneme-level MDD models we'd ideally want
+ *     (mrrubino/..., facebook/wav2vec2-xlsr-53-espeak-cv-ft) are not
+ *     deployed to the HF Inference API. Calling /api/mdd would
+ *     always fall back to a hardcoded trigger phoneme, so the real
+ *     signal would be missing — the same /y/ would fire even when
+ *     the user said nothing.
+ *   - `SpeechRecognition` is free, zero-token, runs in Chrome / Edge
+ *     / Safari, and returns Mandarin characters when zh-CN is
+ *     selected. From the actual transcript we compare against the
+ *     expected sentence character by character and pin the first
+ *     true mismatch.
  *
  * Browser support note: Firefox does not implement SpeechRecognition.
  * `isSupported()` returns false there and callers fall back to the
- * scripted trigger phoneme.
+ * L1-default trigger phoneme.
  */
 
 // The Web Speech API type definitions are not in every TS lib version;
@@ -204,18 +205,38 @@ export function findFirstMismatch(expected: string, detected: string): number {
  * transcript. Returns an integer percentage in [0, 100]. Used by the
  * RESOLVED report to show how completely the SPEAK step landed.
  *
- * Counts position-aligned hanzi matches against the target length —
- * skipping all whitespace and CJK / Latin punctuation on both sides.
- * Returns 0 when the transcript is empty.
+ * We normalize by `max(expected, detected)` length rather than just
+ * `expected.length` — that way a user who says extra characters
+ * ("我喜欢学中文今天好啊") is penalized too, not rewarded with a
+ * 100% because the first six chars happened to match. Whitespace and
+ * CJK / Latin punctuation are stripped before comparison.
+ *
+ * Optional `confidence` (0..1, from the browser ASR's per-result
+ * confidence score) multiplies the raw match — clear speech that
+ * scores 0.95 keeps most of its coverage; mumbling that returns the
+ * sentence with 0.4 confidence gets penalised honestly. Default 1.0
+ * preserves backward compatibility when no confidence is available
+ * (Whisper / fallback paths).
  */
-export function charCoveragePct(expected: string, detected: string): number {
+export function charCoveragePct(
+  expected: string,
+  detected: string,
+  confidence = 1
+): number {
   const norm = (s: string) => s.replace(/[\s　、。，！？.,!?]/g, "");
   const e = norm(expected);
   const d = norm(detected);
   if (e.length === 0) return 0;
   let matched = 0;
-  for (let i = 0; i < e.length; i++) {
-    if (i < d.length && e[i] === d[i]) matched++;
+  const minLen = Math.min(e.length, d.length);
+  for (let i = 0; i < minLen; i++) {
+    if (e[i] === d[i]) matched++;
   }
-  return Math.round((matched / e.length) * 100);
+  const denom = Math.max(e.length, d.length);
+  const positional = matched / denom;
+  // Confidence ≥ 0.95 leaves the score essentially untouched; below
+  // that we shrink linearly so a low-confidence "correct" transcript
+  // never reads as a perfect attempt. Clamp to [0, 1].
+  const confFactor = Math.max(0, Math.min(1, confidence < 0.95 ? confidence : 1));
+  return Math.round(positional * confFactor * 100);
 }

@@ -17,7 +17,10 @@
  *
  * Versioning: bump CACHE_NAME's suffix on any breaking shell change.
  */
-const CACHE_NAME = "mirror-shell-v1";
+// Bump on any breaking shell change. v2: stopped caching Vite-hashed
+// /assets/* URLs because they change every build and the cache-first
+// rule was serving 404s for old hashes after a redeploy.
+const CACHE_NAME = "mirror-shell-v2";
 
 // Hand-picked URLs that must be available offline. The Vite-built
 // assets (CSS / JS / hashed images) aren't listed here — they're
@@ -88,6 +91,13 @@ self.addEventListener("fetch", (event) => {
   // Don't try to intercept third-party fonts / Gemini / HF / ElevenLabs.
   if (url.origin !== self.location.origin) return;
 
+  // Vite-hashed build assets — never cache. Each build produces a new
+  // hash; cache-first here would serve 404s for old hashes after a
+  // redeploy and the dev server logs ENOENT on every stale request.
+  // The browser's own HTTP cache (with immutable + far-future
+  // expiry headers) is the right layer for these.
+  if (url.pathname.startsWith("/assets/")) return;
+
   // Navigation requests: network-first, fallback to cached shell.
   if (req.mode === "navigate") {
     event.respondWith(
@@ -98,18 +108,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets + demo fallbacks: cache-first with background fill.
+  // Only the explicitly-precached demo fallbacks should be served from
+  // cache. Everything else passes through to network so we never paint
+  // a stale shell after a code change.
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
-      return fetch(req).then((res) => {
-        // Only cache successful, same-origin responses.
-        if (res.ok && res.type === "basic") {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-        }
-        return res;
-      });
+      return fetch(req);
     })
   );
 });

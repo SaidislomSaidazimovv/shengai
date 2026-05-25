@@ -1,20 +1,23 @@
 /**
- * Hardcoded demo voice — implements Mirror DevHandover v02 §3:
+ * Bundled demo voice — the "Skip with demo voice (faster)" escape
+ * hatch on ReferenceStage and the §10 killswitch both point here.
  *
- *   "For the demo: pre-record the on-stage user's reference the night
- *    before, pre-generate the clone, hardcode the voice ID in the
- *    demo build."
+ * Mirror's main path forces every visitor through a fresh Reference
+ * Capture so Golden Voice plays in their own timbre. The preset below
+ * is NOT used as a silent fallback — it only takes effect when the
+ * user explicitly skips reference capture (judges short on time), or
+ * the demo presenter triggers the §10 killswitch. The IdleStage
+ * Reference card labels this state "DEMO VOICE ACTIVE" so the user
+ * isn't misled into thinking Golden Voice is their own clone.
  *
  * Populated by `npm run sync-demo-voice` from web/, which reads the
- * most recent cloned voice from the ElevenLabs workspace (using the
- * key in api/.env) and rewrites this file. Until that script runs,
- * `voiceId` stays null and the app falls back to live cloning per
- * session via the ReferenceStage flow.
+ * most recent cloned voice from the ElevenLabs workspace and rewrites
+ * this file. If `voiceId` is null, the Skip button still works but
+ * Golden Voice falls back to the pre-rendered MP3 path.
  *
- * When `voiceId` IS set, App.tsx prefers a non-null `session.clone`
- * (a fresh live capture in this tab) but otherwise reuses the
- * hardcoded ID — so the on-stage demo can skip reference capture
- * entirely and jump straight to Golden Voice on the first attempt.
+ * The /api/clone_delete endpoint refuses to delete this voiceId
+ * (see PROTECTED_VOICE_IDS) so beforeunload cleanup never wipes the
+ * preset out of the workspace.
  */
 export interface DemoUser {
   voiceId: string | null;

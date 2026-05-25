@@ -11,6 +11,7 @@
  */
 
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { L1 } from "@/lib/demoData";
 
 export type Stage =
@@ -78,6 +79,12 @@ interface SessionState {
   clone: VoiceClone | null;
   setClone: (c: VoiceClone | null) => void;
 
+  /** True while /api/clone is in flight. Drives the ReferenceStage
+   *  progress indicator so the user sees the 10-20s ElevenLabs IVC
+   *  wait isn't a frozen screen. */
+  cloning: boolean;
+  setCloning: (v: boolean) => void;
+
   /* ----- Per-attempt artifacts ----- */
   targetRecording: { url: string; blob: Blob } | null;
   setTargetRecording: (r: { url: string; blob: Blob } | null) => void;
@@ -99,6 +106,12 @@ interface SessionState {
   /** Reason string from the failing ASR call — shown in NoSpeechStage for debug. */
   asrReason: string | null;
   setAsrReason: (r: string | null) => void;
+
+  /** ASR confidence 0..1 — browser SR returns a real number, Whisper
+   *  doesn't (we use 0.7 as the default). Drives the SPEAK row of
+   *  the RESOLVED report so it isn't a binary captured/not. */
+  asrConfidence: number;
+  setAsrConfidence: (v: number) => void;
 
   golden: GoldenClip | null;
   setGolden: (g: GoldenClip | null) => void;
@@ -131,7 +144,9 @@ interface SessionState {
   bumpAttempts: () => void;
 }
 
-export const useSession = create<SessionState>((set) => ({
+export const useSession = create<SessionState>()(
+  persist(
+    (set) => ({
   l1: "russian",
   sentenceId: "wo_xi_huan_xue_zhong_wen",
   setL1: (l1) => set({ l1 }),
@@ -152,6 +167,7 @@ export const useSession = create<SessionState>((set) => ({
       lastTranscript: "",
       asrProvider: "none",
       asrReason: null,
+      asrConfidence: 0,
       golden: null,
       tutor: null,
       tutorLoading: false,
@@ -166,6 +182,9 @@ export const useSession = create<SessionState>((set) => ({
 
   clone: null,
   setClone: (clone) => set({ clone }),
+
+  cloning: false,
+  setCloning: (cloning) => set({ cloning }),
 
   targetRecording: null,
   setTargetRecording: (targetRecording) => set({ targetRecording }),
@@ -184,6 +203,9 @@ export const useSession = create<SessionState>((set) => ({
 
   asrReason: null,
   setAsrReason: (asrReason) => set({ asrReason }),
+
+  asrConfidence: 0,
+  setAsrConfidence: (asrConfidence) => set({ asrConfidence }),
 
   golden: null,
   setGolden: (golden) => set({ golden }),
@@ -207,4 +229,25 @@ export const useSession = create<SessionState>((set) => ({
 
   attemptsThisSession: 0,
   bumpAttempts: () => set((s) => ({ attemptsThisSession: s.attemptsThisSession + 1 })),
-}));
+    }),
+    {
+      name: "mirror-session",
+      storage: createJSONStorage(() => localStorage),
+      // Persist ONLY user preferences — language pair, last sentence,
+      // tutor language. The voice clone is deliberately NOT persisted
+      // any more: keeping it across refreshes meant the mic landed
+      // unlocked on a fresh visit with a stale "YOUR VOICE CLONED"
+      // badge, defeating the Reference Capture gate (the user's
+      // production-mode complaint). Now every fresh load forces a
+      // re-capture, which matches what a first-time visitor sees.
+      // Blob URLs, per-attempt scores and Gemini explanations are
+      // also intentionally excluded — they'd lie or 404 after reload.
+      partialize: (state) => ({
+        l1: state.l1,
+        sentenceId: state.sentenceId,
+        tutorLanguage: state.tutorLanguage,
+      }),
+      version: 2,
+    }
+  )
+);

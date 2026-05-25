@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, ArrowRight, X } from "lucide-react";
+import { Camera, CheckCircle2, ArrowRight, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MatchScore } from "@/components/MatchScore";
@@ -40,20 +40,20 @@ export function MirrorStage({ onDone, onSkip }: Props) {
   const [status, setStatus] = useState<"loading" | "ready" | "denied" | "matched">("loading");
   // v02 §6.7 lock beat — single 180ms flash when match crosses 95%.
   const [lockBeat, setLockBeat] = useState(false);
+  // The Mirror left panel renders only the 2D synthetic avatar. The
+  // 3D variants (RealisticAvatar3D, ProceduralAvatar3D, the wireframe
+  // mesh) were removed at the user's request — they will be revisited
+  // in a future pass. The 2D version's mouth animation is sourced
+  // from the same per-sentence mouth_open_series JSON, so the
+  // animation contract for downstream components is unchanged.
 
   const tracker = useLipTracker({ targetOpenness: 0.04, tolerance: 0.035 });
 
-  // v02 §6.7 demo-cheat: scale the raw alignment so a within-bounds
-  // user reaches 95%+ within ~6-8s of the stage entering. This is
-  // explicit in the spec ("This is a demo, not a contest. The
-  // audience needs to see victory.").
-  const enterAtRef = useRef<number>(performance.now());
-  const elapsedRamp = (() => {
-    const elapsed = (performance.now() - enterAtRef.current) / 1000;
-    // Linear ramp from 1.0 → 1.18 over 6 seconds.
-    return Math.min(1.18, 1 + elapsed * 0.03);
-  })();
-  const boostedAlignment = Math.min(100, tracker.alignment * elapsedRamp);
+  // We render the raw alignment straight from the MediaPipe tracker —
+  // no multiplier, no time-based ramp. Users actually have to match
+  // the target openness to see the score climb; partial matches stay
+  // in the 40-70% range, which is the truthful reading.
+  const displayedAlignment = Math.round(tracker.alignment);
 
   // onDone is wired straight to the user's button click — no auto-
   // advance, so no need to keep a ref to it.
@@ -150,7 +150,13 @@ export function MirrorStage({ onDone, onSkip }: Props) {
       return { x: (1 - visX) * w, y: visY * h };
     };
 
-    const drawPoly = (pts: { x: number; y: number }[], stroke: string, fill?: string) => {
+    const drawPoly = (
+      pts: { x: number; y: number }[],
+      stroke: string,
+      lineWidth = 1.5,
+      fill?: string,
+      closed = true
+    ) => {
       if (pts.length === 0) return;
       ctx.beginPath();
       const first = tx(pts[0]);
@@ -159,35 +165,74 @@ export function MirrorStage({ onDone, onSkip }: Props) {
         const p = tx(pts[i]);
         ctx.lineTo(p.x, p.y);
       }
-      ctx.closePath();
+      if (closed) ctx.closePath();
       if (fill) {
         ctx.fillStyle = fill;
         ctx.fill();
       }
-      ctx.lineWidth = 2;
+      ctx.lineWidth = lineWidth;
       ctx.strokeStyle = stroke;
       ctx.stroke();
     };
 
+    const drawDots = (
+      pts: { x: number; y: number }[],
+      color: string,
+      radius = 1.5
+    ) => {
+      ctx.fillStyle = color;
+      for (const p of pts) {
+        const t = tx(p);
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    // Layer 1 — All 468 landmarks as soft gray dots so the live side
+    // matches the synthetic avatar's "instrument" feel instead of
+    // showing only sparse lip lines on the user's face.
+    drawDots(frame.all, "rgba(10, 10, 10, 0.55)", 1.4);
+
+    // Layer 2 — Feature outlines. Face oval first (faint), then eyes
+    // and brows in fg-primary, nose centerline, and finally the gold/
+    // red lip lines so the mouth still leads the eye.
+    drawPoly(frame.faceOval, "rgba(10, 10, 10, 0.55)", 1.2);
+    drawPoly(frame.leftEye, "rgba(10, 10, 10, 0.85)", 1.5);
+    drawPoly(frame.rightEye, "rgba(10, 10, 10, 0.85)", 1.5);
+    drawPoly(frame.leftBrow, "rgba(10, 10, 10, 0.75)", 1.5, undefined, false);
+    drawPoly(frame.rightBrow, "rgba(10, 10, 10, 0.75)", 1.5, undefined, false);
+    drawPoly(frame.nose, "rgba(10, 10, 10, 0.55)", 1.2, undefined, false);
+
     // v02 §5.2 — gold #C8932E (outer lip) + signal red #E5484D (inner).
-    drawPoly(frame.outer, "#C8932E", "rgba(200, 147, 46, 0.18)");
-    drawPoly(frame.inner, "#E5484D", "rgba(229, 72, 77, 0.06)");
+    drawPoly(frame.outer, "#C8932E", 2, "rgba(200, 147, 46, 0.20)");
+    drawPoly(frame.inner, "#E5484D", 2, "rgba(229, 72, 77, 0.08)");
   }, [tracker.frame]);
 
   // 3. When alignment crosses the threshold, mark matched.
   useEffect(() => {
     if (status !== "ready") return;
-    if (boostedAlignment >= 80) setStatus("matched");
-  }, [boostedAlignment, status]);
+    if (displayedAlignment >= 80) setStatus("matched");
+  }, [displayedAlignment, status]);
 
-  // 3b. Record the peak alignment for the RESOLVED report. Uses the
-  // RAW tracker.alignment, NOT the boostedAlignment — the boost ramp
-  // is a visual demo cheat (always reach 95 on screen) and would lie
-  // in the post-session report. The report stays honest.
+  // 3b. Record the peak alignment for the RESOLVED report — but
+  // require the score to HOLD above a threshold for several frames
+  // before counting it. Without this, a single spurious frame
+  // (random MediaPipe blip, the user adjusting their seat, a sneeze)
+  // could lock in a "peak match" the user never actually produced.
+  // We use a small ring buffer of the last 8 raw scores (~270 ms at
+  // 30 fps) and only update the peak when the *minimum* of that
+  // window beats the current best — meaning the user genuinely
+  // sustained the match for a quarter-second.
+  const sustainedBufferRef = useRef<number[]>([]);
   useEffect(() => {
-    const current = Math.round(tracker.alignment);
-    if (peakSoFar === null || current > peakSoFar) {
-      setPeakMirrorAlignmentPct(current);
+    const buf = sustainedBufferRef.current;
+    buf.push(tracker.alignment);
+    if (buf.length > 8) buf.shift();
+    if (buf.length < 8) return;
+    const sustained = Math.round(Math.min(...buf));
+    if (peakSoFar === null || sustained > peakSoFar) {
+      setPeakMirrorAlignmentPct(sustained);
     }
     // peakSoFar is updated by this same effect; intentionally read-only
     // dependency so we only refire when alignment moves.
@@ -198,20 +243,21 @@ export function MirrorStage({ onDone, onSkip }: Props) {
   // mouth the sentence, mimics it on the right, and clicks "Lock in
   // match" (or presses Enter) when satisfied. Earlier builds auto-
   // advanced after ≥95% match held 1s per v02 §6.7 — removed by
-  // user request for full manual control. Match-boost ramp and lock
-  // beat stay (they only affect the visible score, not the transition).
+  // user request for full manual control. The lock beat stays — it
+  // now fires off the raw alignment, so users who genuinely cross
+  // 95% get the gold pulse.
 
   // Lock beat — fire a single 180ms flash the first time we cross 95%.
   const crossed95Ref = useRef(false);
   useEffect(() => {
     if (crossed95Ref.current) return;
-    if (boostedAlignment >= 95) {
+    if (displayedAlignment >= 95) {
       crossed95Ref.current = true;
       setLockBeat(true);
       const t = window.setTimeout(() => setLockBeat(false), 180);
       return () => window.clearTimeout(t);
     }
-  }, [boostedAlignment]);
+  }, [displayedAlignment]);
 
   return (
     <div className="container py-14">
@@ -226,11 +272,12 @@ export function MirrorStage({ onDone, onSkip }: Props) {
           </Button>
         </div>
 
-        {/* v02 §6.7 hero match score — large mono number, counts up
-            smoothly, turns success green at ≥90 with a soft glow. The
-            boost ramp guarantees we reach 95% within ~6-8s per spec. */}
+        {/* Hero match score — large mono number, counts up smoothly,
+            turns success-green at ≥90 with a soft glow. The displayed
+            value is the raw alignment from the tracker; there is no
+            multiplier behind it. */}
         <div className="flex justify-center mb-10">
-          <MatchScore value={boostedAlignment} />
+          <MatchScore value={displayedAlignment} />
         </div>
 
         {/* v02 §6.7 split layout — left = synthetic Mandarin avatar,
@@ -270,6 +317,26 @@ export function MirrorStage({ onDone, onSkip }: Props) {
                   </span>
                 </div>
               )}
+              {/* MediaPipe model warm-up state — webcam is alive but the
+                  468-point landmarker is still streaming WASM + .task
+                  bytes from Google's CDN. Without this overlay the user
+                  sees their bare face for 2-4s and assumes the demo
+                  hung. */}
+              {status === "ready" && !tracker.ready && !tracker.error && (
+                <div className="absolute inset-0 z-10 grid place-items-center bg-fg/30 backdrop-blur-[2px]">
+                  <div className="bg-white/90 px-4 py-3 rounded-md shadow-2 flex items-center gap-3">
+                    <Loader2 className="h-4 w-4 text-fg animate-spin" strokeWidth={1.5} />
+                    <div>
+                      <div className="font-stamp text-sm leading-tight">
+                        Loading face tracker
+                      </div>
+                      <div className="font-data text-micro uppercase tracking-[0.22em] text-fg/50 mt-0.5">
+                        MediaPipe · 468 landmarks
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {status === "denied" && (
                 <div className="absolute inset-0 grid place-items-center p-6 text-center z-10">
                   <div>
@@ -306,7 +373,7 @@ export function MirrorStage({ onDone, onSkip }: Props) {
               <div className="absolute bottom-0 inset-x-0 h-1 bg-fg/10">
                 <div
                   className="h-full bg-gold transition-[width] duration-200"
-                  style={{ width: `${boostedAlignment}%` }}
+                  style={{ width: `${displayedAlignment}%` }}
                 />
               </div>
             </div>

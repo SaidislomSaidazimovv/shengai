@@ -96,42 +96,66 @@ def _call_elevenlabs(audio: dict[str, Any], label: str) -> dict[str, Any]:
     if not EL_KEY:
         return {"voiceId": "demo-fallback", "source": "fallback", "reason": "no_elevenlabs_key"}
     try:
+        # Trust the multipart Content-Type — MediaRecorder produces WebM
+        # on Chrome/Firefox, MP4 on Safari, WAV from the prerender script.
+        # ElevenLabs IVC accepts all of these; what trips it up is the
+        # filename/extension claiming a format the bytes don't match.
+        # The frontend now sends filenames whose extension matches the
+        # content-type, but we also defend here in case an older client
+        # is in flight.
+        content_type = audio.get("content_type", "audio/webm")
+        filename = audio.get("filename", "reference.webm")
+        if filename == "reference.wav" and "webm" in content_type:
+            filename = "reference.webm"
         files = {
-            "files": (
-                audio.get("filename", "reference.wav"),
-                audio["data"],
-                audio.get("content_type", "audio/wav"),
-            ),
+            "files": (filename, audio["data"], content_type),
         }
         data = {
             "name": label,
             "description": "Mirror instant clone (L1 reference)",
-            "remove_background_noise": "true",
+            # Background-noise removal is an extra ~3-5s on ElevenLabs's
+            # side. We capture in a quiet demo room with the browser's
+            # AGC on and noiseSuppression off — the source is clean
+            # enough that turning the cleanup off cuts IVC latency
+            # without a noticeable quality hit. Flip this back to "true"
+            # if the live environment is loud.
+            "remove_background_noise": "false",
         }
         res = requests.post(
             f"{EL_BASE}/v1/voices/add",
             headers={"xi-api-key": EL_KEY, "accept": "application/json"},
             files=files,
             data=data,
-            timeout=20,
+            # Frontend's wrapping timeout is 45s — we leave ~10s for
+            # proxy + network overhead so the server response always
+            # lands first. ElevenLabs IVC measured at 18-28s during
+            # peak load + the older 25s budget was getting hit.
+            timeout=35,
         )
         if res.status_code not in (200, 201):
             return {
                 "voiceId": "demo-fallback",
                 "source": "fallback",
                 "reason": f"elevenlabs_{res.status_code}",
-                "detail": res.text[:200],
+                "detail": res.text[:400],
             }
         payload = res.json()
         voice_id = payload.get("voice_id") or payload.get("voiceId")
         if not voice_id:
             return {"voiceId": "demo-fallback", "source": "fallback", "reason": "no_voice_id"}
         return {"voiceId": voice_id, "source": "elevenlabs"}
+    except requests.Timeout:
+        return {
+            "voiceId": "demo-fallback",
+            "source": "fallback",
+            "reason": "elevenlabs_timeout",
+        }
     except Exception as exc:  # noqa: BLE001
         return {
             "voiceId": "demo-fallback",
             "source": "fallback",
             "reason": f"exception:{exc.__class__.__name__}",
+            "detail": str(exc)[:200],
         }
 
 

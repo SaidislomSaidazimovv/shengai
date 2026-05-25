@@ -3,17 +3,16 @@ import { useSession, type TutorLanguage } from "@/store/session";
 import { Sparkles, Loader2 } from "lucide-react";
 
 /**
- * AI Tutor panel — Gemini 2.0 Flash native-language explanation under the
- * clinical DiagnosisCard.
+ * AI Tutor panel — Gemini 2.0 Flash native-language explanation under
+ * the clinical DiagnosisCard.
  *
- * The DiagnosisCard stays deterministic (hardcoded headline + citation)
- * so the demo screenshot moment is preserved. This panel is the second
+ * The DiagnosisCard carries the deterministic clinical readout
+ * (headline + phoneme shift + citation). This panel is the second
  * voice: a 2-3 sentence native-language explanation generated per
- * attempt + one short articulatory tip. Lets the user toggle Uzbek /
- * Russian / English.
- *
- * Hackathon "Build with AI" stack slide marks Gemini 2.0 Flash as
- * Majburiy — this is where it earns its keep.
+ * attempt plus one short articulatory tip. The user can toggle the
+ * language between Uzbek, Russian, and English. While the live
+ * Gemini call is in flight the panel shows the offline-library
+ * fallback so the user never sees an empty placeholder.
  */
 interface Props {
   onLanguageChange?: (lang: TutorLanguage) => void;
@@ -72,13 +71,12 @@ export function AITutorPanel({ onLanguageChange }: Props) {
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex items-center gap-3 text-fg/40 font-data text-sm py-2">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
-            <span className="uppercase tracking-[0.18em] text-meta">Generating…</span>
-          </div>
-        ) : tutor ? (
+        {tutor ? (
           <>
+            {/* While the live Gemini call is in flight we keep the
+                instant canned content visible (already painted on
+                analysis-complete) but mark the panel as "upgrading"
+                so the user knows a richer explanation is on its way. */}
             <p className="font-sans text-body text-fg/85 leading-relaxed mb-5">
               {tutor.explanation}
             </p>
@@ -91,12 +89,24 @@ export function AITutorPanel({ onLanguageChange }: Props) {
             </div>
 
             <div className="mt-5 flex items-center justify-between font-data text-micro uppercase tracking-[0.2em] text-fg/30">
-              <span>
-                {tutor.source === "gemini" ? "Gemini · Live" : "Offline fallback"}
+              <span className="flex items-center gap-2">
+                {loading ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
+                    <span>Upgrading with Gemini…</span>
+                  </>
+                ) : (
+                  <span>{tutor.source === "gemini" ? "Gemini · Live" : "Offline fallback"}</span>
+                )}
               </span>
               <span>Lang · {tutor.language.toUpperCase()}</span>
             </div>
           </>
+        ) : loading ? (
+          <div className="flex items-center gap-3 text-fg/40 font-data text-sm py-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
+            <span className="uppercase tracking-[0.18em] text-meta">Generating…</span>
+          </div>
         ) : (
           <div className="font-data text-sm text-fg/40 py-2">
             No explanation available yet.

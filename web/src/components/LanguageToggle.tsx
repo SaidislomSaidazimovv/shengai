@@ -3,9 +3,11 @@ import { useSession } from "@/store/session";
 import { cn } from "@/lib/utils";
 
 /**
- * Two-state segmented control. Per §5 of the handover this is also the
- * "L1 detection cheat" input — what the user picks here is what the
- * diagnosis card will claim was detected.
+ * Two-state segmented control. The user's selection here drives the
+ * L1 label the diagnosis card uses — we deliberately ask up front
+ * rather than trying to infer L1 from the audio, because the
+ * speakers we target know their own first language better than any
+ * inferred guess.
  */
 export function LanguageToggle() {
   const l1 = useSession((s) => s.l1);

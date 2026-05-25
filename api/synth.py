@@ -62,7 +62,12 @@ def _call_elevenlabs(voice_id: str, text: str) -> dict[str, Any]:
                     "use_speaker_boost": True,
                 },
             },
-            timeout=15,
+            # Server-side budget — must finish before the frontend's
+            # 35s wrapping timeout aborts. Flash v2.5 is fast on warm
+            # paths but a fresh-clone first synth can take 20-25s
+            # while ElevenLabs's CDN caches the voice. 30s leaves
+            # 5s for proxy overhead inside the 35s client window.
+            timeout=30,
         )
         if res.status_code != 200:
             return {
