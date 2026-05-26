@@ -12,7 +12,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { L1 } from "@/lib/demoData";
+import type { L1, DemoSentence } from "@/lib/demoData";
 
 export type Stage =
   | "idle"
@@ -54,7 +54,13 @@ export type TutorLanguage = "uz" | "ru" | "en";
 export interface TutorExplanation {
   explanation: string;
   tip: string;
-  source: "gemini" | "fallback";
+  /** Which engine produced this content:
+   *  - "openai"   — primary (GPT-4o-mini, set in /api/explain.py)
+   *  - "gemini"   — automatic backup when OpenAI is unreachable
+   *  - "fallback" — the offline phoneme × L1 × language library
+   *    (used when both live providers fail or while a live call
+   *    is in flight) */
+  source: "openai" | "gemini" | "fallback";
   language: TutorLanguage;
 }
 
@@ -64,6 +70,14 @@ interface SessionState {
   sentenceId: string;
   setL1: (l1: L1) => void;
   setSentenceId: (id: string) => void;
+
+  /** User-supplied sentence created via /api/translate. When set,
+   *  takes priority over `sentenceId` everywhere — App.tsx reads
+   *  `getActiveSentence()` rather than calling `getDemoSentence`
+   *  directly. Selecting one of the three built-in sentences clears
+   *  this back to null. */
+  customSentence: DemoSentence | null;
+  setCustomSentence: (s: DemoSentence | null) => void;
 
   /* ----- State machine ----- */
   stage: Stage;
@@ -116,6 +130,14 @@ interface SessionState {
   golden: GoldenClip | null;
   setGolden: (g: GoldenClip | null) => void;
 
+  /** Set when produceGoldenVoice() decided NOT to provide a clip
+   *  (synth failure, missing clone, etc). Drives the explicit
+   *  "Audio unavailable" UI on GoldenStage — production policy is
+   *  to refuse to play a substitute speaker. Null means we're
+   *  still waiting on the live synthesis to complete. */
+  goldenError: string | null;
+  setGoldenError: (e: string | null) => void;
+
   /* ----- Gemini-powered native-language tutor ----- */
   tutorLanguage: TutorLanguage;
   setTutorLanguage: (l: TutorLanguage) => void;
@@ -149,8 +171,14 @@ export const useSession = create<SessionState>()(
     (set) => ({
   l1: "russian",
   sentenceId: "wo_xi_huan_xue_zhong_wen",
+  // Setting a built-in sentence clears any active custom one — the
+  // two are mutually exclusive sources of truth for "what is the
+  // current sentence".
   setL1: (l1) => set({ l1 }),
-  setSentenceId: (sentenceId) => set({ sentenceId }),
+  setSentenceId: (sentenceId) => set({ sentenceId, customSentence: null }),
+
+  customSentence: null,
+  setCustomSentence: (customSentence) => set({ customSentence }),
 
   stage: "idle",
   error: null,
@@ -169,6 +197,7 @@ export const useSession = create<SessionState>()(
       asrReason: null,
       asrConfidence: 0,
       golden: null,
+      goldenError: null,
       tutor: null,
       tutorLoading: false,
       recordingDurationSec: null,
@@ -208,7 +237,14 @@ export const useSession = create<SessionState>()(
   setAsrConfidence: (asrConfidence) => set({ asrConfidence }),
 
   golden: null,
-  setGolden: (golden) => set({ golden }),
+  // Clear the error whenever a valid golden clip lands — keeps the
+  // two fields from getting out of sync. Manual reset still works
+  // via setGoldenError(null).
+  setGolden: (golden) =>
+    set(golden ? { golden, goldenError: null } : { golden }),
+
+  goldenError: null,
+  setGoldenError: (goldenError) => set({ goldenError }),
 
   tutorLanguage: "uz",
   setTutorLanguage: (tutorLanguage) => set({ tutorLanguage }),

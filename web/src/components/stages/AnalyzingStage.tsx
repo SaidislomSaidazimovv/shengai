@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/demoData";
+import { useActiveSentence } from "@/lib/activeSentence";
 import { ease } from "@/motion/presets";
 
 /**
@@ -32,13 +32,12 @@ const LABEL_TIMINGS = [
 ] as const;
 
 export function AnalyzingStage() {
-  const sentenceId = useSession((s) => s.sentenceId);
   const triggeredPhoneme = useSession((s) => s.triggeredPhoneme);
   const triggeredPhonemeIdx = useSession((s) => s.triggeredPhonemeIdx);
   const asrProvider = useSession((s) => s.asrProvider);
   const l1 = useSession((s) => s.l1);
 
-  const sentence = getDemoSentence(sentenceId);
+  const sentence = useActiveSentence();
   const syllables = sentence?.syllables ?? [];
 
   // Map the triggered phoneme back to a syllable index. Prefer the

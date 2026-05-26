@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import { Mic, AlertCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SentencePrompt } from "@/components/SentencePrompt";
+import { CustomSentenceModal } from "@/components/CustomSentenceModal";
+import { SentenceLibraryDropdown } from "@/components/SentenceLibraryDropdown";
 import { useSession } from "@/store/session";
 import { ease } from "@/motion/presets";
+import type { DemoSentence } from "@/lib/demoData";
 
 interface Props {
   onStartRecording: () => void;
@@ -26,6 +30,7 @@ interface Props {
 export function IdleStage({ onStartRecording, onStartReference }: Props) {
   const reference = useSession((s) => s.reference);
   const clone = useSession((s) => s.clone);
+  const setCustomSentence = useSession((s) => s.setCustomSentence);
   const micEnabled = !!clone;
   const usingDemoVoice = clone?.source === "fallback";
   // Differentiate explicit Skip (voiceId points at DEMO_USER) from a
@@ -33,9 +38,27 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
   // and CTA should not lie to a user who actually recorded a reference.
   const cloneFailed = usingDemoVoice && clone?.voiceId === "demo-fallback";
 
+  // CustomSentenceModal is mounted unconditionally and toggled via
+  // this flag — keeps the entrance/exit animation owned by the modal
+  // itself instead of being tied to a remount.
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+
+  // Both the dropdown (LibraryEntry) and the modal (LibraryEntry) call
+  // this — we widen the parameter to DemoSentence since the session
+  // field is typed as DemoSentence and we only need the base shape.
+  const handleCustomSelect = (sentence: DemoSentence) => {
+    setCustomSentence(sentence);
+  };
+
   return (
     <div className="container py-14 grid place-items-center">
       <div className="w-full max-w-3xl">
+        <div className="flex justify-end mb-4">
+          <SentenceLibraryDropdown
+            onSelect={handleCustomSelect}
+            onNew={() => setCustomModalOpen(true)}
+          />
+        </div>
         <SentencePrompt />
 
         <div className="mt-16 flex flex-col items-center gap-6">
@@ -145,6 +168,12 @@ export function IdleStage({ onStartRecording, onStartReference }: Props) {
           </div>
         </div>
       </div>
+
+      <CustomSentenceModal
+        open={customModalOpen}
+        onClose={() => setCustomModalOpen(false)}
+        onSelect={handleCustomSelect}
+      />
     </div>
   );
 }

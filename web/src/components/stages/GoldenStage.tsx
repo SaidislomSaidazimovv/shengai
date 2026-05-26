@@ -3,7 +3,7 @@ import { Play, ArrowRight, RotateCcw, AlertTriangle, Pause, Gauge, Loader2 } fro
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/demoData";
+import { useActiveSentence } from "@/lib/activeSentence";
 import { cn } from "@/lib/utils";
 
 // Discrete playback rates exposed to the user — useful for picking
@@ -32,8 +32,9 @@ interface Props {
  */
 export function GoldenStage({ onContinue, onRetry }: Props) {
   const golden = useSession((s) => s.golden);
+  const goldenError = useSession((s) => s.goldenError);
   const clone = useSession((s) => s.clone);
-  const sentence = getDemoSentence(useSession((s) => s.sentenceId));
+  const sentence = useActiveSentence();
   const setGoldenListenedPct = useSession((s) => s.setGoldenListenedPct);
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -236,21 +237,21 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
       ? "Pre-rendered fallback"
       : "Awaiting clip";
 
-  // Transparent fallback (§10): the user captured their own reference
-  // but the live /api/synth call failed, so we're playing the bundled
-  // demo MP3 instead. We surface this rather than silently swap timbres —
-  // the "your own voice" claim is the whole product, and a quiet swap
-  // would be the worst form of the Reference Audio Trap from §3.
-  const liveCloneFellBack =
-    clone?.source === "live" &&
-    clone.voiceId !== "demo-fallback" &&
-    golden?.source === "prerendered";
+  // Mirror the session's goldenError into the local audioMissing flag
+  // — App.tsx flips goldenError when /api/synth fails or the clone
+  // is unusable; we want the error UI to render immediately on stage
+  // entry in that case, not only after the <audio> element's onError
+  // fires (which would never fire because there is no clip to load).
+  useEffect(() => {
+    if (goldenError) setAudioMissing(true);
+  }, [goldenError]);
 
   // Synthesizing — App.tsx fired /api/synth on stage entry but the
   // ElevenLabs response hasn't landed yet (2-12s, longer on cold
   // start). Without this state the user just sees a flat waveform
-  // and assumes the player is broken.
-  const synthesizing = !golden && !audioMissing;
+  // and assumes the player is broken. Once goldenError is set we
+  // jump straight to the error UI instead of the spinner.
+  const synthesizing = !golden && !audioMissing && !goldenError;
 
   // Elapsed timer for the synthesizing state — same affordance as
   // the Reference clone spinner so the wait feels like progress.
@@ -473,29 +474,21 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
           </span>
         </div>
 
-        {liveCloneFellBack && !audioMissing && (
-          <div className="mt-4 clinical-card p-4 border-signal/40 bg-signal/5">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-4 w-4 text-signal mt-0.5 shrink-0" />
-              <div className="text-sm font-data text-fg/70 leading-relaxed">
-                <strong className="text-fg">Using demo voice.</strong> Live
-                synthesis didn't return in time, so we're playing the bundled
-                demo clip instead of your clone. Replay still works; retry
-                capture if the network is back.
-              </div>
-            </div>
-          </div>
-        )}
+        {/* The earlier "Using demo voice" transparent-fallback banner
+            was removed — there is no longer a demo MP3 to silently
+            swap to. /api/synth failures now route to the explicit
+            "Audio unavailable" state below. */}
 
         {audioMissing && (
           <div className="mt-4 clinical-card p-4 border-signal/40 bg-signal/5">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-4 w-4 text-signal mt-0.5 shrink-0" />
               <div className="text-sm font-data text-fg/70 leading-relaxed">
-                <strong className="text-fg">Golden clip not available yet.</strong> Connect an
-                ElevenLabs key (or drop a pre-rendered MP3 in{" "}
-                <code className="text-fg">web/public/demo-audio/</code>) to enable the cloned
-                voice. The rest of the demo loop still runs.
+                <strong className="text-fg">Audio unavailable.</strong> The
+                live synthesis call didn't return. We deliberately don't
+                play a substitute speaker — only your own cloned voice
+                ships from this screen. Try Retry capture if the issue
+                persists, or check your network.
               </div>
             </div>
           </div>

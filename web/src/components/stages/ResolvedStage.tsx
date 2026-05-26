@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { useSession } from "@/store/session";
-import { DEMO_SENTENCES, getDemoSentence } from "@/lib/demoData";
+import { DEMO_SENTENCES } from "@/lib/demoData";
+import { useActiveSentence } from "@/lib/activeSentence";
 import { ease } from "@/motion/presets";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +41,7 @@ interface StepRow {
 export function ResolvedStage({ onAgain, onNext }: Props) {
   const sentenceId = useSession((s) => s.sentenceId);
   const setSentenceId = useSession((s) => s.setSentenceId);
-  const sentence = getDemoSentence(sentenceId);
+  const sentence = useActiveSentence();
   const attempts = useSession((s) => s.attemptsThisSession);
 
   const recordingDurationSec = useSession((s) => s.recordingDurationSec);

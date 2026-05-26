@@ -42,8 +42,44 @@ export interface ExplainRequest {
 export interface ExplainResponse {
   explanation: string;
   tip: string;
-  source: "gemini" | "fallback";
+  /** Engine that produced the response. OpenAI is the primary path
+   *  in /api/explain.py; Gemini fires automatically as a silent
+   *  backup; "fallback" means both live providers failed. */
+  source: "openai" | "gemini" | "fallback";
   reason?: string | null;
+}
+
+/** Per-L1 diagnosis the /api/translate endpoint returns inside its
+ *  `diagnoses` object. Shape mirrors the static `Diagnosis` type from
+ *  demoData.ts so a custom sentence drops straight into the existing
+ *  DiagnosisCard / DemoSentence pipeline. */
+export interface TranslateDiagnosis {
+  headline: string;
+  subhead: string;
+  detail: string;
+  triggerPhoneme: string;
+  phonemeShift: { expected: string; detected: string };
+  patternNumber: number;
+  patternTotal: number;
+  citation: string;
+}
+
+export interface TranslateRequest {
+  text: string;
+  sourceL1: "russian" | "uzbek" | "english";
+}
+
+export interface TranslateResponse {
+  hanzi: string;
+  expectedPhonemes: string[];
+  charPhonemeIdx: number[];
+  diagnoses: {
+    russian: TranslateDiagnosis;
+    uzbek: TranslateDiagnosis;
+  };
+  source: "openai" | "fallback";
+  error?: string;
+  detail?: string;
 }
 
 class TimeoutError extends Error {
@@ -165,5 +201,19 @@ export const api = {
   async health(): Promise<{ ok: boolean; elevenlabs: boolean; hf: boolean }> {
     const res = await fetch(`${BASE}/api/health`, { method: "POST" });
     return res.json();
+  },
+
+  /**
+   * Custom-sentence translation pipeline. The user types in their
+   * native language; the server replies with Mandarin hanzi + IPA
+   * phonemes + per-L1 diagnoses. Pinyin is derived client-side via
+   * pinyin-pro so the LLM doesn't waste tokens generating it.
+   *
+   * Typical latency: 4-10s on OpenAI GPT-4o-mini. We allow 30s here
+   * — well over the 25s server-side budget — so a slow first call
+   * never aborts before the response lands.
+   */
+  async translate(req: TranslateRequest): Promise<TranslateResponse> {
+    return postWithTimeout<TranslateResponse>("/api/translate", req, 30000);
   },
 };

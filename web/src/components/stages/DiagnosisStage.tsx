@@ -3,7 +3,7 @@ import { DiagnosisCard } from "@/components/DiagnosisCard";
 import { AITutorPanel } from "@/components/AITutorPanel";
 import { ArrowRight } from "lucide-react";
 import { useSession, type TutorLanguage } from "@/store/session";
-import { getDemoSentence } from "@/lib/demoData";
+import { useActiveSentence } from "@/lib/activeSentence";
 
 interface Props {
   /**
@@ -23,9 +23,8 @@ interface Props {
  */
 export function DiagnosisStage({ onTutorLanguageChange, onContinue }: Props) {
   const l1 = useSession((s) => s.l1);
-  const sentenceId = useSession((s) => s.sentenceId);
   const triggeredPhoneme = useSession((s) => s.triggeredPhoneme);
-  const sentence = getDemoSentence(sentenceId);
+  const sentence = useActiveSentence();
 
   if (!sentence) return null;
   const diagnosis = sentence.diagnoses[l1];

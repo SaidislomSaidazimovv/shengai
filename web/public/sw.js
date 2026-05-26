@@ -31,18 +31,16 @@ const PRECACHE_URLS = [
   "/index.html",
   "/mirror-logo.svg",
   "/mirror-mark.svg",
-  "/demo-audio/wo_xi_huan_xue_zhong_wen.mp3",
-  "/demo-audio/ni_hao_wo_jiao.mp3",
-  "/demo-audio/zhe_shi_yi_ge_yusan.mp3",
+  // Avatar mouth-open tracks for the three default sentences —
+  // the per-sentence JSON the 2D SyntheticAvatar reads to animate
+  // the lips. Kept in the precache so a Wi-Fi drop mid-stage still
+  // animates the mouth. The pre-rendered Golden Voice MP3s and the
+  // pre-computed analysis JSONs are gone: synth failures now show
+  // an explicit "Audio unavailable" message and silence routes to
+  // NoSpeechStage. We never substitute a different speaker.
   "/demo/avatar/wo_xi_huan_xue_zhong_wen.json",
   "/demo/avatar/ni_hao_wo_jiao.json",
   "/demo/avatar/zhe_shi_yi_ge_yusan.json",
-  "/demo/analysis/wo_xi_huan_xue_zhong_wen_russian.json",
-  "/demo/analysis/wo_xi_huan_xue_zhong_wen_uzbek.json",
-  "/demo/analysis/ni_hao_wo_jiao_russian.json",
-  "/demo/analysis/ni_hao_wo_jiao_uzbek.json",
-  "/demo/analysis/zhe_shi_yi_ge_yusan_russian.json",
-  "/demo/analysis/zhe_shi_yi_ge_yusan_uzbek.json",
 ];
 
 self.addEventListener("install", (event) => {

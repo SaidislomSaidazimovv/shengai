@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { MatchScore } from "@/components/MatchScore";
 import { SyntheticAvatar } from "@/components/SyntheticAvatar";
 import { useSession } from "@/store/session";
-import { getDemoSentence } from "@/lib/demoData";
+import { useActiveSentence } from "@/lib/activeSentence";
 import { useLipTracker } from "@/hooks/useLipTracker";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +30,7 @@ interface Props {
  * still completes via the Skip button.
  */
 export function MirrorStage({ onDone, onSkip }: Props) {
-  const sentence = getDemoSentence(useSession((s) => s.sentenceId));
+  const sentence = useActiveSentence();
   const setPeakMirrorAlignmentPct = useSession((s) => s.setPeakMirrorAlignmentPct);
   const peakSoFar = useSession((s) => s.peakMirrorAlignmentPct);
   const videoRef = useRef<HTMLVideoElement>(null);

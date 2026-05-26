@@ -71,12 +71,19 @@ export function AITutorPanel({ onLanguageChange }: Props) {
           </div>
         </div>
 
-        {tutor ? (
+        {loading && !tutor ? (
+          // Live call in flight, nothing painted yet. With OpenAI
+          // the typical wait is 2-5s, which is short enough that a
+          // labelled spinner reads as deliberate analysis rather
+          // than a frozen panel.
+          <div className="flex items-center gap-3 text-fg/40 font-data text-sm py-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
+            <span className="uppercase tracking-[0.18em] text-meta">
+              Analyzing with GPT-4o-mini…
+            </span>
+          </div>
+        ) : tutor ? (
           <>
-            {/* While the live Gemini call is in flight we keep the
-                instant canned content visible (already painted on
-                analysis-complete) but mark the panel as "upgrading"
-                so the user knows a richer explanation is on its way. */}
             <p className="font-sans text-body text-fg/85 leading-relaxed mb-5">
               {tutor.explanation}
             </p>
@@ -89,24 +96,16 @@ export function AITutorPanel({ onLanguageChange }: Props) {
             </div>
 
             <div className="mt-5 flex items-center justify-between font-data text-micro uppercase tracking-[0.2em] text-fg/30">
-              <span className="flex items-center gap-2">
-                {loading ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
-                    <span>Upgrading with Gemini…</span>
-                  </>
-                ) : (
-                  <span>{tutor.source === "gemini" ? "Gemini · Live" : "Offline fallback"}</span>
-                )}
+              <span>
+                {tutor.source === "openai"
+                  ? "OpenAI · Live"
+                  : tutor.source === "gemini"
+                    ? "Gemini · Live"
+                    : "Offline fallback"}
               </span>
               <span>Lang · {tutor.language.toUpperCase()}</span>
             </div>
           </>
-        ) : loading ? (
-          <div className="flex items-center gap-3 text-fg/40 font-data text-sm py-2">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
-            <span className="uppercase tracking-[0.18em] text-meta">Generating…</span>
-          </div>
         ) : (
           <div className="font-data text-sm text-fg/40 py-2">
             No explanation available yet.

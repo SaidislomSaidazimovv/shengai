@@ -95,13 +95,17 @@ export default function App() {
 
   const requestTutorExplanation = useCallback(
     async (phoneme: string, transcript: string, language: TutorLanguage) => {
-      const sentence = getDemoSentence(session.sentenceId);
+      const sentence = session.customSentence ?? getDemoSentence(session.sentenceId);
       if (!sentence) return;
-      // Paint canned content immediately so the AITutorPanel never
-      // shows a 5-15s spinner. Our local library is phoneme × L1 ×
-      // language indexed, so the initial paint is already specific
-      // and useful — never a generic template.
-      session.setTutor(getInstantTutor(phoneme, language, session.l1));
+      // The panel renders a spinner while OpenAI is in flight
+      // (typical 2-5s) — the library is no longer painted up front.
+      // With Gemini's 8-15s latency we needed the instant canned
+      // content to avoid an empty panel; OpenAI is fast enough that
+      // the brief wait is preferable to painting one explanation
+      // and then swapping it to a different one a few seconds later.
+      // The library now fires only as a true emergency fallback if
+      // BOTH live providers fail.
+      session.setTutor(null);
       session.setTutorLoading(true);
       try {
         const res = await api.explain({
@@ -112,28 +116,24 @@ export default function App() {
           phoneme,
           language,
         });
-        // Critical: only replace the painted canned content when
-        // Gemini ACTUALLY produced the response. If the server fell
-        // back to its own canned (timeout, bad_json, quota), that
-        // canned is generic and strictly worse than the library
-        // entry we already painted — overwriting it would downgrade
-        // the user's view from "tongue tip curled toward the palate"
-        // back to "L1 has no direct match for /X/". Keep what we
-        // have; just flip the loading flag off.
-        if (res.source === "gemini") {
+        if (res.source === "openai" || res.source === "gemini") {
           session.setTutor({
             explanation: res.explanation,
             tip: res.tip,
-            source: "gemini",
+            source: res.source,
             language,
           });
         } else {
-          session.setTutorLoading(false);
+          // Both live providers fell through (timeout, quota, bad
+          // JSON). Paint the offline phoneme × L1 × language library
+          // entry so the panel never stays empty — labelled
+          // "Offline fallback" via source: "fallback".
+          session.setTutor(getInstantTutor(phoneme, language, session.l1));
         }
       } catch {
-        // Network failure or AbortController timeout. Keep the
-        // library entry, just turn off the loading indicator.
-        session.setTutorLoading(false);
+        // Network failure or AbortController timeout. Same emergency
+        // path as a fallback-source response — paint the library.
+        session.setTutor(getInstantTutor(phoneme, language, session.l1));
       }
     },
     // session methods are stable
@@ -152,7 +152,7 @@ export default function App() {
 
   const runAnalysisAndDiagnosis = useCallback(
     async (target: Recording) => {
-      const sentence = getDemoSentence(session.sentenceId);
+      const sentence = session.customSentence ?? getDemoSentence(session.sentenceId);
       if (!sentence) {
         session.fail("Demo sentence missing.");
         return;
@@ -202,30 +202,13 @@ export default function App() {
         reason = `browser · ${browserAsr.error ?? "no-speech"}`;
       }
 
-      // v02 §10 fallback — both ASR paths returned empty. Load the
-      // pre-computed analysis JSON for this sentence + L1 so the
-      // demo still produces a coherent diagnosis card instead of
-      // routing to NO_SPEECH. Only fires when there really is no
-      // transcript (the API errored or the mic heard silence).
-      if (!transcript) {
-        try {
-          const url = `/demo/analysis/${session.sentenceId}_${session.l1}.json`;
-          const res = await fetch(url);
-          if (res.ok) {
-            const fallback = (await res.json()) as {
-              mockTranscript?: string;
-              triggerPhoneme?: string;
-            };
-            if (fallback.mockTranscript) {
-              transcript = fallback.mockTranscript;
-              provider = "none";
-              reason = `${reason ?? "asr · empty"} · fallback-json`;
-            }
-          }
-        } catch {
-          // JSON fetch failed — fall through to the existing no-speech path.
-        }
-      }
+      // Earlier builds had a §10 "demo cannot fail" fallback that
+      // loaded a pre-computed analysis JSON when both ASR paths came
+      // back empty — silence would still produce a coherent
+      // DiagnosisCard built from a mock transcript the user never
+      // spoke. The production cutover removed it: silence now
+      // routes to NoSpeechStage with the real upstream reason. We
+      // never invent a diagnosis for audio that didn't exist.
 
       session.setLastTranscript(transcript);
       session.setAsrProvider(provider);
@@ -310,32 +293,35 @@ export default function App() {
   }, [session]);
 
   const produceGoldenVoice = useCallback(async () => {
-    const sentence = getDemoSentence(session.sentenceId);
+    const sentence = session.customSentence ?? getDemoSentence(session.sentenceId);
     if (!sentence) return;
 
     // session.clone is guaranteed to be set by the time we reach this
-    // stage: IdleStage refuses to start recording without it, and the
-    // ReferenceStage either captures a fresh live clone or assigns the
-    // bundled demo voice via Skip-with-demo. The ?? on the next line
-    // is therefore defense-in-depth only.
+    // stage: IdleStage refuses to start recording without it. The
+    // ?? on the next line is therefore defense-in-depth only.
     const voiceId = session.clone?.voiceId ?? DEMO_USER.voiceId;
-    if (voiceId && voiceId !== "demo-fallback") {
-      try {
-        const res = await api.synthesize(voiceId, sentence.pinyin);
-        const audio = base64ToBlobUrl(res.audioBase64, "audio/mpeg");
-        session.setGolden({ url: audio, source: res.source });
-        return;
-      } catch {
-        // fall through to pre-render. GoldenStage surfaces a banner
-        // when the user was expecting their live clone but ended up on
-        // the prerendered fallback (the Reference Trap warning we
-        // never want to be silent about).
-      }
+    if (!voiceId || voiceId === "demo-fallback") {
+      // No usable voice ID — surface that to GoldenStage so it can
+      // show the "Audio unavailable" state instead of silently
+      // swapping to a bundled MP3 of a different speaker.
+      session.setGolden(null);
+      session.setGoldenError("no_voice_id");
+      return;
     }
-    session.setGolden({
-      url: `/demo-audio/${sentence.id}.mp3`,
-      source: "prerendered",
-    });
+    try {
+      const res = await api.synthesize(voiceId, sentence.pinyin);
+      const audio = base64ToBlobUrl(res.audioBase64, "audio/mpeg");
+      session.setGolden({ url: audio, source: res.source });
+    } catch (err) {
+      // Live synthesis failed (network, timeout, ElevenLabs down).
+      // Production policy: never substitute a different speaker's
+      // voice. Clear the golden clip and let GoldenStage render
+      // the explicit "Audio unavailable" error UI.
+      session.setGolden(null);
+      session.setGoldenError(
+        err instanceof Error ? err.message : "synth_failed"
+      );
+    }
   }, [session]);
 
   const onGoldenContinue = useCallback(() => session.goto("mirror"), [session]);
@@ -448,12 +434,12 @@ export default function App() {
               ? () => session.reset()
               : undefined;
 
-  // v02 §10 failure-insurance shortcuts.
-  // Cmd/Ctrl+Shift+D — killswitch: wipe session state, drop straight
-  // back to IDLE, force the demo into pre-rendered fallback mode.
+  // Cmd/Ctrl+Shift+D — emergency reset. Wipes per-attempt state and
+  // drops the user back to IDLE. The earlier killswitch silently
+  // swapped in a demo voice so the on-stage flow could keep playing;
+  // production policy is honest, so we just reset cleanly and let
+  // the user re-capture if they want to continue.
   const onKillswitch = useCallback(() => {
-    // Release the live clone slot if one exists — best-effort, since
-    // the demo will resume on the prerendered path either way.
     const prev = session.clone;
     if (prev && prev.source === "live" && prev.voiceId !== "demo-fallback") {
       if (!DEMO_USER.voiceId || prev.voiceId !== DEMO_USER.voiceId) {
@@ -461,26 +447,13 @@ export default function App() {
       }
     }
     session.reset();
+    session.setClone(null);
     setMode("main");
-    // Tag the session so subsequent Golden Voice stages skip live
-    // ElevenLabs and go straight to the pre-rendered MP3 path.
-    session.setClone({ voiceId: "demo-fallback", source: "fallback" });
-    // eslint-disable-next-line no-console
-    console.warn("[Mirror §10] Killswitch fired — demo in fallback mode.");
   }, [session]);
 
-  // Cmd/Ctrl+G — force Golden Voice to fall back to the pre-rendered
-  // MP3 for the current sentence, even if ElevenLabs is reachable.
-  const onForceGoldenFallback = useCallback(() => {
-    const sentence = getDemoSentence(session.sentenceId);
-    if (!sentence) return;
-    session.setGolden({
-      url: `/demo-audio/${sentence.id}.mp3`,
-      source: "prerendered",
-    });
-    // eslint-disable-next-line no-console
-    console.warn("[Mirror §10] Force-fallback fired — Golden Voice = MP3.");
-  }, [session]);
+  // The earlier Cmd+G "force Golden Voice fallback" shortcut was
+  // removed with the rest of the demo-voice swap path — there is no
+  // longer a pre-rendered MP3 we could swap to.
 
   useKeyboardShortcuts({
     enabled: mode === "main",
@@ -495,7 +468,6 @@ export default function App() {
     onAdvance: stageAdvance,
     onReset: () => session.reset(),
     onKillswitch,
-    onForceGoldenFallback,
   });
 
   /* ----------- Cleanup on unmount ----------- */
