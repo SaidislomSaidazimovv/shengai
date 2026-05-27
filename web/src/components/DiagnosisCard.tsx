@@ -140,8 +140,10 @@ export function DiagnosisCard({
       className={cn(
         // v02 §6.5: card sits on --bg-surface (#FFFFFF) with --radius-xl,
         // --shadow-4 (the dramatic depth), 64px padding, max-width 720px.
+        // Padding scales down on mobile so the 80px display headline has
+        // room to breathe instead of slamming into the card edges.
         "relative w-full max-w-180 mx-auto bg-white rounded-xl shadow-4",
-        hero ? "p-12 md:p-16" : "p-8"
+        hero ? "p-6 sm:p-10 md:p-12 lg:p-16" : "p-5 sm:p-8"
       )}
     >
       {/* Top instrument header — corner registration marks + meta line. */}
@@ -178,22 +180,33 @@ export function DiagnosisCard({
       </motion.div>
 
       {/* Headline — signal red, heavy condensed.
-          v02 §5.3 text-display (80px / 0.95 line / weight 700). */}
+          v02 §5.3 text-display (80px / 0.95 line / weight 700) on
+          desktop. Steps down to 36/48/60 below md so it never
+          overflows narrow viewports — the 80px is the wow size, not
+          a viewport-killer. `wrap-break-word` is the safety net for
+          headlines like "INSUFFICIENT VOWEL SPACE" that can run
+          longer than expected. */}
       <motion.h1
         variants={itemVariantsAt(DELAYS.headline)}
         className={cn(
-          "font-stamp text-signal tracking-tightest",
-          hero ? "text-display" : "text-4xl"
+          "font-stamp text-signal tracking-tightest wrap-break-word",
+          hero
+            ? "text-4xl sm:text-5xl md:text-6xl lg:text-display"
+            : "text-3xl md:text-4xl"
         )}
       >
         {diagnosis.headline}
       </motion.h1>
 
       {/* Subhead — clinical descriptor.
-          v02 §5.3 text-title (32px / 1.1 line / weight 500). */}
+          v02 §5.3 text-title (32px / 1.1 line / weight 500) on
+          desktop, smaller on mobile. */}
       <motion.div
         variants={itemVariantsAt(DELAYS.subhead)}
-        className={cn("font-stamp text-fg mt-4", hero ? "text-title" : "text-xl")}
+        className={cn(
+          "font-stamp text-fg mt-4 wrap-break-word",
+          hero ? "text-xl sm:text-2xl md:text-title" : "text-lg md:text-xl"
+        )}
       >
         {diagnosis.subhead}
       </motion.div>

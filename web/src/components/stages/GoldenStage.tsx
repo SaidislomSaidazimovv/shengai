@@ -310,18 +310,20 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
           </span>
         </div>
 
-        {/* v02 §6.6 headline — text-display, two-line, hard left-justified
-            feel via center alignment. */}
+        {/* v02 §6.6 headline — text-display (80px) is the desktop wow
+            size; on mobile it would crash through the 343px usable
+            width, so we step down through 36/48/60 below md. The
+            hanzi line follows the same scale curve. */}
         <div className="text-center mb-10">
-          <h1 className="font-stamp text-display text-fg leading-none">
+          <h1 className="font-stamp text-4xl sm:text-5xl md:text-6xl lg:text-display text-fg leading-none wrap-break-word">
             YOUR VOICE.
             <br />
             PERFECT MANDARIN.
           </h1>
-          <div className="font-cjk text-5xl md:text-6xl text-gold leading-none mt-8">
+          <div className="font-cjk text-4xl sm:text-5xl md:text-6xl text-gold leading-none mt-6 sm:mt-8 wrap-break-word">
             {sentence?.hanzi}
           </div>
-          <div className="font-data text-fg/60 mt-3">{sentence?.pinyin}</div>
+          <div className="font-data text-fg/60 mt-3 text-sm sm:text-base">{sentence?.pinyin}</div>
         </div>
 
         {/* Spectrum bar visualisation — cleaner than the earlier RMS

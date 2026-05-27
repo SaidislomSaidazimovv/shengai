@@ -299,9 +299,12 @@ export function MirrorStage({ onDone, onSkip }: Props) {
 
         {/* v02 §6.7 split layout — left = synthetic Mandarin avatar,
             right = live webcam tracking. Both square cards, 400×400
-            target, gap 48px on desktop. Lock beat: when match crosses
-            95%, both cards pulse a single 180ms gold ring. */}
-        <div className="grid md:grid-cols-2 gap-12 mb-8">
+            target, gap 48px on desktop. On mobile the two panels
+            stack vertically (default grid), with a tighter gap so
+            the user doesn't have to scroll between avatar and their
+            own face to compare. Lock beat: when match crosses 95%,
+            both cards pulse a single 180ms gold ring. */}
+        <div className="grid sm:grid-cols-2 gap-5 sm:gap-8 md:gap-12 mb-8">
           {/* LEFT — YOUR AVATAR */}
           <div className="flex flex-col items-center gap-3">
             <div

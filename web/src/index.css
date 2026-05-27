@@ -193,12 +193,21 @@
 
 /* v4 `.container` is bare (just responsive max-width). Mirror
    DevHandover v02 §5.4 locks the container at 1200px max-width with
-   48px horizontal padding on desktop. We pin both here so existing
-   `<div className="container ...">` usage matches the spec. */
+   48px horizontal padding on desktop. On mobile a fixed 48px would
+   eat 96px of a 375px viewport — we step the padding down for the
+   smaller breakpoints so phones get the headline real estate they
+   need without changing the desktop spec. */
 @utility container {
   margin-inline: auto;
-  padding-inline: 3rem; /* 48px per v02 §5.4 */
-  max-width: 1200px;    /* v02 §5.4 page container */
+  padding-inline: 1rem;     /* mobile (<640px): 16px */
+  max-width: 1200px;        /* v02 §5.4 page container */
+
+  @media (min-width: 640px) {
+    padding-inline: 1.5rem; /* sm: 24px */
+  }
+  @media (min-width: 768px) {
+    padding-inline: 3rem;   /* md+: 48px per v02 §5.4 */
+  }
 }
 
 @layer base {
