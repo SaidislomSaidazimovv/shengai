@@ -424,6 +424,12 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
               src={golden.url}
               onLoadedMetadata={(e) => {
                 const a = e.currentTarget as HTMLAudioElement;
+                // Some mobile browsers initialise <audio> at a
+                // reduced volume — Chrome Android in particular has
+                // been observed at ~0.5 for blob: URLs created mid-
+                // session. Pin it explicitly so the user actually
+                // hears the cloned voice at full level.
+                a.volume = 1.0;
                 // Lock pitch BEFORE setting playbackRate so the very
                 // first frame after load is already pitch-corrected.
                 a.preservesPitch = true;

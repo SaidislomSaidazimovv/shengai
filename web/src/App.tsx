@@ -227,14 +227,25 @@ export default function App() {
       let reason: string | null = null;
 
       const browserUsable = browserAsr.supported && transcript.length > 0;
-      const browserGaveUpEarly =
-        !browserAsr.supported ||
-        (browserAsr.error && browserAsr.error !== "no-speech");
 
       if (browserUsable) {
         provider = "browser";
-      } else if (browserGaveUpEarly) {
-        // Web Speech couldn't help — try Whisper.
+      } else {
+        // Whisper is now the fallback for ANY empty browser result,
+        // including `error: "no-speech"`. The previous gate skipped
+        // Whisper on no-speech, on the theory that the browser had
+        // listened and confirmed silence. Mobile reality: Chrome
+        // Android, Samsung Internet, and in-app webviews routinely
+        // return "no-speech" while a perfectly valid sentence sits in
+        // the audio blob — language-pack gaps, audio-focus loss to
+        // the SR engine, and in-app webview restrictions all surface
+        // as the same error. Whisper gets the real audio bytes and
+        // produces a transcript anyway. Cost is one HF call per
+        // false negative — worth it for the user actually being
+        // heard.
+        const browserFailReason = !browserAsr.supported
+          ? "browser · unsupported"
+          : `browser · ${browserAsr.error ?? "empty"}`;
         try {
           const hf = await api.asr(target.blob);
           if (hf.transcript) {
@@ -242,16 +253,13 @@ export default function App() {
             provider = "huggingface";
             reason = hf.source;
           } else {
-            // HF call succeeded but returned empty — capture why for debug.
-            reason = `hf · ${hf.source}${hf.reason ? ` · ${hf.reason}` : ""}`;
+            // HF also returned empty — combine both reasons so the
+            // debug surface shows the full path that was tried.
+            reason = `${browserFailReason} · hf · ${hf.source}${hf.reason ? ` · ${hf.reason}` : ""}`;
           }
         } catch (err) {
-          reason = `hf · network · ${err instanceof Error ? err.message : "unknown"}`;
+          reason = `${browserFailReason} · hf · network · ${err instanceof Error ? err.message : "unknown"}`;
         }
-      } else if (!browserAsr.supported) {
-        reason = "browser · unsupported";
-      } else {
-        reason = `browser · ${browserAsr.error ?? "no-speech"}`;
       }
 
       // Earlier builds had a §10 "demo cannot fail" fallback that
