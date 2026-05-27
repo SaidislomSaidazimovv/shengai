@@ -17,6 +17,16 @@
    newer tw-animate-css. */
 @plugin "tailwindcss-animate";
 
+/* `tall-screen` — true when the viewport has enough vertical room
+   to host the Mirror stage's two square panels side by side without
+   forcing the user to scroll the second one into view. Landscape
+   phones (e.g. iPhone 12 in landscape = 844 × 390) clear our width
+   breakpoints but only have 390 px of height, which an aspect-square
+   panel pair would overflow. Used in combination with `sm:` or `md:`
+   so the 2-column layout only activates when there is both
+   horizontal AND vertical room. */
+@custom-variant tall-screen (@media (min-height: 640px));
+
 @theme {
   /* ───────── Brand colors (v02 §5.2) ─────────
      Legacy --color-bg / --color-fg / --color-line / --color-muted
