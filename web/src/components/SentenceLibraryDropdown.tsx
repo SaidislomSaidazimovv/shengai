@@ -121,7 +121,11 @@ export function SentenceLibraryDropdown({ onSelect, onNew }: Props) {
                   <button
                     type="button"
                     onClick={(e) => handleRemove(e, entry.id)}
-                    className="text-fg/30 hover:text-signal transition-colors opacity-0 group-hover:opacity-100 shrink-0 mt-1"
+                    // Trash stayed hover-revealed on desktop, which
+                    // meant touch devices had no way to delete an
+                    // entry. Surface it at reduced opacity on touch,
+                    // keep the hover bump on pointer-enabled UIs.
+                    className="text-fg/30 hover:text-signal transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 shrink-0 mt-1 p-1.5 -m-1.5"
                     aria-label="Remove sentence"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />

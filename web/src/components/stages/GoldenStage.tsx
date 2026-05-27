@@ -475,7 +475,11 @@ export function GoldenStage({ onContinue, onRetry }: Props) {
                   type="button"
                   onClick={() => setPlaybackRate(rate)}
                   className={cn(
-                    "font-data text-[11px] tabular-nums uppercase tracking-widest h-7 min-w-11 px-2 border transition-colors duration-150",
+                    // 8 rate pills on a narrow viewport — flex-wrap
+                    // handles overflow but each pill still needs to
+                    // be tappable. h-9 (36px) on mobile + h-7 on md
+                    // keeps the desktop instrument density intact.
+                    "font-data text-[11px] tabular-nums uppercase tracking-widest h-9 md:h-7 min-w-11 px-2.5 md:px-2 border transition-colors duration-150",
                     playbackRate === rate
                       ? "border-gold text-gold bg-gold/5"
                       : "border-line text-fg/50 hover:text-fg hover:border-fg/30"

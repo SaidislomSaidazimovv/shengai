@@ -29,8 +29,11 @@ const buttonVariants = cva(
           "border border-line text-fg hover:border-fg/40 hover:bg-fg/[0.03]",
       },
       size: {
+        // Heights tuned for touch: sm bumped from 32 → 36px (the iOS
+        // 44px guideline is for primary actions only; 36 is acceptable
+        // for secondary controls and matches Material density-3).
         default: "h-10 px-5 text-sm",
-        sm: "h-8 px-3 text-xs",
+        sm: "h-9 px-3 text-xs",
         lg: "h-12 px-7 text-base",
         xl: "h-14 px-9 text-lg",
         icon: "h-10 w-10",

@@ -71,7 +71,10 @@ export function AITutorPanel({ onLanguageChange }: Props) {
                 aria-selected={language === opt.code}
                 onClick={() => handleSwitch(opt.code)}
                 className={cn(
-                  "font-data text-micro uppercase tracking-[0.2em] h-7 px-2.5 border transition-colors duration-150 ease-out",
+                  // h-9 (36px) on mobile so the language pills clear the
+                  // touch-target floor; tighter h-7 on md+ where mouse
+                  // precision lets the original clinical density work.
+                  "font-data text-micro uppercase tracking-[0.2em] h-9 md:h-7 px-3 md:px-2.5 border transition-colors duration-150 ease-out",
                   language === opt.code
                     ? "border-fg text-fg"
                     : "border-line text-fg/40 hover:text-fg/70 hover:border-fg/30"

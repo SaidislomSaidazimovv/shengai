@@ -144,7 +144,7 @@ export function CustomSentenceModal({ open, onClose, onSelect }: Props) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-xl bg-white rounded-xl shadow-4 p-6 md:p-8"
+            className="relative w-full max-w-xl bg-white rounded-xl shadow-4 p-5 sm:p-6 md:p-8 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-5">
@@ -183,7 +183,9 @@ export function CustomSentenceModal({ open, onClose, onSelect }: Props) {
                       disabled={loading}
                       onClick={() => setSourceL1(opt.value)}
                       className={cn(
-                        "font-stamp uppercase tracking-tighter text-xs px-3 h-8 transition-colors disabled:opacity-50",
+                        // h-9 (36px) tap target on mobile; h-8 keeps
+                        // the desktop dense look.
+                        "font-stamp uppercase tracking-tighter text-xs px-3 h-9 md:h-8 transition-colors disabled:opacity-50",
                         sourceL1 === opt.value
                           ? "bg-fg text-bg"
                           : "text-fg/60 hover:text-fg"
@@ -275,10 +277,10 @@ export function CustomSentenceModal({ open, onClose, onSelect }: Props) {
                   <div className="font-data text-micro uppercase tracking-[0.22em] text-fg/40 mb-2">
                     Mandarin
                   </div>
-                  <div className="font-cjk text-4xl md:text-5xl text-fg leading-tight">
+                  <div className="font-cjk text-3xl sm:text-4xl md:text-5xl text-fg leading-tight wrap-break-word">
                     {preview.hanzi}
                   </div>
-                  <div className="font-data text-fg/50 mt-2 text-body">
+                  <div className="font-data text-fg/50 mt-2 text-sm sm:text-body wrap-break-word">
                     {preview.pinyin}
                   </div>
                 </div>
