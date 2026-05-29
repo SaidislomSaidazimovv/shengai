@@ -1,33 +1,37 @@
 /**
  * Bundled demo voice — the "Skip with demo voice (faster)" escape
- * hatch on ReferenceStage and the §10 killswitch both point here.
+ * hatch on ReferenceStage points here.
  *
  * Mirror's main path forces every visitor through a fresh Reference
- * Capture so Golden Voice plays in their own timbre. The preset below
- * is NOT used as a silent fallback — it only takes effect when the
- * user explicitly skips reference capture (judges short on time), or
- * the demo presenter triggers the §10 killswitch. The IdleStage
- * Reference card labels this state "DEMO VOICE ACTIVE" so the user
- * isn't misled into thinking Golden Voice is their own clone.
+ * Capture so Golden Voice plays in their own timbre. This preset is
+ * NOT used as a silent fallback — it only takes effect when the user
+ * explicitly skips reference capture (judges short on time). The
+ * IdleStage Reference card labels this state "DEMO VOICE ACTIVE" so
+ * the user isn't misled into thinking Golden Voice is their own clone.
  *
- * Populated by `npm run sync-demo-voice` from web/, which reads the
- * most recent cloned voice from the ElevenLabs workspace and rewrites
- * this file. If `voiceId` is null, the Skip button still works but
- * Golden Voice falls back to the pre-rendered MP3 path.
+ * IMPORTANT — this is a NEUTRAL ElevenLabs stock voice ("Alice —
+ * Clear, Engaging Educator", category: premade), NOT anyone's personal
+ * clone. Earlier this pointed at the developer's own "mirror-uzbek"
+ * IVC clone, which meant a stranger tapping Skip would hear the
+ * developer's real cloned voice. We swapped it for a stock voice so
+ * no personal timbre is ever exposed as the public demo fallback.
+ * Alice is multilingual-capable, so Flash v2.5 renders Mandarin with
+ * it; the accent is non-native but acceptable for an explicitly-
+ * labelled escape hatch.
  *
- * The /api/clone_delete endpoint refuses to delete this voiceId
- * (see PROTECTED_VOICE_IDS) so beforeunload cleanup never wipes the
- * preset out of the workspace.
+ * Stock voices are owned by ElevenLabs, not the workspace, so the
+ * /api/clone_delete cleanup can never wipe this out — no protection
+ * entry needed beyond the existing DEMO_VOICE_ID env guard.
  */
 export interface DemoUser {
   voiceId: string | null;
   voiceName: string | null;
-  /** ISO timestamp of when the voice was cloned. */
+  /** ISO timestamp of when the voice was cloned. null for stock voices. */
   clonedAt: string | null;
 }
 
 export const DEMO_USER: DemoUser = {
-  voiceId: "7XZI42EXXCNtSTZu8yVz",
-  voiceName: "mirror-uzbek",
-  clonedAt: "2026-05-24T06:05:24.000Z",
+  voiceId: "Xb7hH8MSUJpSbSDYk0k2",
+  voiceName: "Alice — Clear Educator (stock)",
+  clonedAt: null,
 };
